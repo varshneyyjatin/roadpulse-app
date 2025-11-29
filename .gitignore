@@ -58,3 +58,8 @@ coverage
 # Debug
 .vscode/launch.json
 .vscode/settings.json
+
+# Docker
+*.tar
+*.tar.gz
+docker-compose.override.yml
