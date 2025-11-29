@@ -1,0 +1,9 @@
+<svg width="400" height="250" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="250" fill="#e5e7eb"/>
+  <g transform="translate(200, 125)">
+    <!-- License plate -->
+    <rect x="-80" y="-25" width="160" height="50" fill="#fef3c7" stroke="#f59e0b" stroke-width="3" rx="4"/>
+    <text x="0" y="5" font-family="monospace" font-size="24" font-weight="bold" fill="#92400e" text-anchor="middle">XX 00 XX 0000</text>
+  </g>
+  <text x="200" y="200" font-family="Arial, sans-serif" font-size="14" fill="#6b7280" text-anchor="middle">No Plate Image</text>
+</svg>
