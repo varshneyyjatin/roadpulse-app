@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAccessControl } from '../../contexts/AccessControl';
+import loginBackground from '../../assets/login-background.jpg';
 
 const Login = ({ onLoginSuccess }) => {
   const { login } = useAccessControl();
@@ -45,7 +46,7 @@ const Login = ({ onLoginSuccess }) => {
           <div 
             className="absolute inset-0 bg-cover bg-center rounded-r-[1.5rem]"
             style={{
-              backgroundImage: `url('/src/assets/login-background.jpg')`,
+              backgroundImage: `url(${loginBackground})`,
             }}
           ></div>
           
