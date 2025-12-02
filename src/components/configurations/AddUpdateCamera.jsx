@@ -274,17 +274,15 @@ const AddUpdateCamera = ({ camera, onBack, onSuccess }) => {
       // Add either device_id or box_id based on solution type
       if (solutionType === 'box' && formData.box_id) {
         payload.box_id = parseInt(formData.box_id);
-        // For box solution, these fields are optional
-        delete payload.ip_address;
-        delete payload.username;
-        delete payload.password;
       } else {
         payload.device_id = formData.device_id;
-        payload.ip_address = formData.ip_address;
-        payload.username = formData.username;
-        if (formData.password) {
-          payload.password = formData.password;
-        }
+      }
+
+      // Add network credentials (required for both solutions)
+      payload.ip_address = formData.ip_address;
+      payload.username = formData.username;
+      if (formData.password) {
+        payload.password = formData.password;
       }
 
       // Parse JSON fields if provided
@@ -526,59 +524,57 @@ const AddUpdateCamera = ({ camera, onBack, onSuccess }) => {
             />
         </div>
 
-        {/* Network fields - Only for Camera Solution */}
-        {solutionType === 'camera' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-            {/* IP Address */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                IP Address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="ip_address"
-                value={formData.ip_address}
-                onChange={handleInputChange}
-                required={solutionType === 'camera'}
-                placeholder="e.g., 192.168.1.100"
-                className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-              />
-            </div>
-
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Username <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleInputChange}
-                required={solutionType === 'camera'}
-                placeholder="e.g., admin"
-                className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Password <span className="text-red-500">*</span>
-                {isEditMode && <span className="text-xs text-gray-500 ml-2">(leave blank to keep current)</span>}
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required={solutionType === 'camera' && !isEditMode}
-                placeholder={isEditMode ? "Leave blank to keep current" : "Enter password"}
-                className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-              />
-            </div>
+        {/* Network fields - For both Camera and Box Solution */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+          {/* IP Address */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              IP Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="ip_address"
+              value={formData.ip_address}
+              onChange={handleInputChange}
+              required
+              placeholder="e.g., 192.168.1.100"
+              className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+            />
           </div>
-        )}
+
+          {/* Username */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Username <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              required
+              placeholder="e.g., admin"
+              className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Password <span className="text-red-500">*</span>
+              {isEditMode && <span className="text-xs text-gray-500 ml-2">(leave blank to keep current)</span>}
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              required={!isEditMode}
+              placeholder={isEditMode ? "Leave blank to keep current" : "Enter password"}
+              className="w-full px-4 h-[42px] border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             {/* ROI */}

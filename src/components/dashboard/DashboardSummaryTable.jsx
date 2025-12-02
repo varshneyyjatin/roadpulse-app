@@ -603,6 +603,11 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                       src={getPlateImage(log)}
                       alt="Plate"
                       onClick={() => openDetailsModal(log)}
+                      onError={(e) => {
+                        console.error('Failed to load plate image, using placeholder');
+                        e.target.src = '/placeholder-plate.svg';
+                      }}
+                      crossOrigin="anonymous"
                       className="w-20 h-12 object-cover rounded border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                     />
                   </td>
@@ -815,6 +820,11 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                   src={getPlateImage(log)}
                   alt="Plate"
                   onClick={() => openDetailsModal(log)}
+                  onError={(e) => {
+                    console.error('Failed to load plate image, using placeholder');
+                    e.target.src = '/placeholder-plate.svg';
+                  }}
+                  crossOrigin="anonymous"
                   className="w-full h-20 object-cover rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
                 />
               </div>

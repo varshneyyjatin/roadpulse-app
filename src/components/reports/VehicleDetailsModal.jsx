@@ -140,6 +140,10 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
                 <img
                   src={getVehicleImage(vehicleData)}
                   alt="Vehicle"
+                  onError={(e) => {
+                    console.error('Failed to load vehicle image, using placeholder');
+                    e.target.src = '/placeholder-vehicle.svg';
+                  }}
                   crossOrigin="anonymous"
                   className="max-w-full max-h-full object-contain rounded-lg"
                 />
@@ -156,6 +160,10 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
                   <img
                     src={getPlateImage(vehicleData)}
                     alt="Plate"
+                    onError={(e) => {
+                      console.error('Failed to load plate image, using placeholder');
+                      e.target.src = '/placeholder-plate.svg';
+                    }}
                     crossOrigin="anonymous"
                     className="max-w-full max-h-full object-contain"
                   />

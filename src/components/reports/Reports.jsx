@@ -1076,6 +1076,11 @@ const Reports = () => {
                             src={getPlateImage(log)}
                             alt="Plate"
                             onClick={() => openDetailsModal(log)}
+                            onError={(e) => {
+                              console.error('Failed to load plate image, using placeholder');
+                              e.target.src = '/placeholder-plate.svg';
+                            }}
+                            crossOrigin="anonymous"
                             className="w-20 h-12 object-cover rounded border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                           />
                         </td>
@@ -1127,6 +1132,11 @@ const Reports = () => {
                           src={getPlateImage(log)}
                           alt="Plate"
                           onClick={() => openDetailsModal(log)}
+                          onError={(e) => {
+                            console.error('Failed to load plate image, using placeholder');
+                            e.target.src = '/placeholder-plate.svg';
+                          }}
+                          crossOrigin="anonymous"
                           className="w-full h-16 object-cover rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
                         />
                       </div>
@@ -1136,6 +1146,11 @@ const Reports = () => {
                           src={getVehicleImage(log)}
                           alt="Vehicle"
                           onClick={() => openDetailsModal(log)}
+                          onError={(e) => {
+                            console.error('Failed to load vehicle image, using placeholder');
+                            e.target.src = '/placeholder-vehicle.svg';
+                          }}
+                          crossOrigin="anonymous"
                           className="w-full h-16 object-cover rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
                         />
                       </div>

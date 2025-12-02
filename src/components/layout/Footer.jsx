@@ -1,3 +1,6 @@
+import translineLogo from '../../assets/transline-logo.png';
+import translineWhiteLogo from '../../assets/transline-white-logo.png';
+
 const Footer = () => {
   return (
     <footer className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 mt-8 md:mt-16 transition-all duration-300">
@@ -13,8 +16,8 @@ const Footer = () => {
           {/* Right: Powered by */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 dark:text-gray-400">Powered by</span>
-            <img src="/src/assets/transline-logo.png" alt="Transline" className="h-7 lg:h-8 opacity-80 hover:opacity-100 transition dark:hidden" />
-            <img src="/src/assets/transline-white-logo.png" alt="Transline" className="h-7 lg:h-8 opacity-80 hover:opacity-100 transition hidden dark:block" />
+            <img src={translineLogo} alt="Transline" className="h-7 lg:h-8 opacity-80 hover:opacity-100 transition dark:hidden" />
+            <img src={translineWhiteLogo} alt="Transline" className="h-7 lg:h-8 opacity-80 hover:opacity-100 transition hidden dark:block" />
           </div>
         </div>
 
@@ -29,8 +32,8 @@ const Footer = () => {
           {/* Bottom: Powered by */}
           <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
             <span className="text-xs text-gray-500 dark:text-gray-400">Powered by</span>
-            <img src="/src/assets/transline-logo.png" alt="Transline" className="h-5 opacity-80 dark:hidden" />
-            <img src="/src/assets/transline-white-logo.png" alt="Transline" className="h-5 opacity-80 hidden dark:block" />
+            <img src={translineLogo} alt="Transline" className="h-5 opacity-80 dark:hidden" />
+            <img src={translineWhiteLogo} alt="Transline" className="h-5 opacity-80 hidden dark:block" />
           </div>
         </div>
       </div>
