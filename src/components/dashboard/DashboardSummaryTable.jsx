@@ -194,17 +194,19 @@ const CustomDropdown = ({ label, value, onChange, options, placeholder, icon, sh
   );
 };
 
-const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false, canFixVehicleNumber = false, canDownloadImage = false, onDataRefresh }) => {
+const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false, canFixVehicleNumber = false, canDownloadImage = false, onDataRefresh, onPageChange }) => {
   const vehicleLogs = data?.summary_data || [];
+  const pagination = data?.pagination || {};
 
   // Pagination & Filters
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedCheckpoint, setSelectedCheckpoint] = useState('');
   const [showBlacklisted, setShowBlacklisted] = useState(false);
   const [showWhitelisted, setShowWhitelisted] = useState(false);
+  const [paginationLoading, setPaginationLoading] = useState(false);
 
   // Vehicle Details Modal
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -254,9 +256,8 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
   }, [vehicleLogs, selectedLocation]);
 
   const entriesOptions = [
-    { value: 10, label: '10 entries' },
-    { value: 25, label: '25 entries' },
     { value: 50, label: '50 entries' },
+    { value: 75, label: '75 entries' },
     { value: 100, label: '100 entries' }
   ];
 
@@ -285,16 +286,16 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
     });
   }, [vehicleLogs, searchQuery, selectedLocation, selectedCheckpoint, showBlacklisted, showWhitelisted]);
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentLogs = filteredLogs.slice(startIndex, endIndex);
+  // Use API pagination data
+  const totalPages = pagination.total_pages || 1;
+  const currentLogs = filteredLogs; // Data already paginated from API
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedLocation, selectedCheckpoint, itemsPerPage, showBlacklisted, showWhitelisted]);
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [searchQuery, selectedLocation, selectedCheckpoint, showBlacklisted, showWhitelisted]);
 
   // Reset checkpoint when location changes
   useEffect(() => {
@@ -345,7 +346,30 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
   };
 
   const handlePageChange = (page) => {
+    setPaginationLoading(true);
     setCurrentPage(page);
+    if (onPageChange) {
+      onPageChange(page, itemsPerPage);
+    }
+    // Show loader for minimum 400ms to give user feedback
+    setTimeout(() => setPaginationLoading(false), 400);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPaginationLoading(true);
+    setItemsPerPage(newSize);
+    setCurrentPage(1); // Reset to first page
+    if (onPageChange) {
+      onPageChange(1, newSize);
+    }
+    // Show loader for minimum 400ms to give user feedback
+    setTimeout(() => setPaginationLoading(false), 400);
+  };
+
+  const handleGoToFirstPage = () => {
+    if (currentPage !== 1) {
+      handlePageChange(1);
+    }
   };
 
   const clearFilters = () => {
@@ -381,7 +405,17 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
 
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-all duration-300">
+    <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-all duration-300">
+      {/* Pagination Loading Overlay */}
+      {paginationLoading && (
+        <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-xl">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Loading...</p>
+          </div>
+        </div>
+      )}
+
       {/* Header with Title */}
       <div className="p-4 md:p-6 border-b border-gray-200 dark:border-slate-700">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -600,6 +634,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                   </td>
                   <td className="py-5 px-6">
                     <img
+                      style={{borderRadius: "10px"}}
                       src={getPlateImage(log)}
                       alt="Plate"
                       onClick={() => openDetailsModal(log)}
@@ -608,7 +643,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                         e.target.src = '/placeholder-plate.svg';
                       }}
                       crossOrigin="anonymous"
-                      className="w-20 h-12 object-cover rounded border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                      className="w-32 h-16 object-contain dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                     />
                   </td>
                   <td className="py-5 px-6">
@@ -825,7 +860,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                     e.target.src = '/placeholder-plate.svg';
                   }}
                   crossOrigin="anonymous"
-                  className="w-full h-20 object-cover rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="w-full h-24 object-contain rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
                 />
               </div>
 
@@ -869,16 +904,16 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
         <div className="p-4 md:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/20">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm gap-3 mb-4">
             <span className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} entries
+              Showing {((pagination.page || 1) - 1) * (pagination.page_size || itemsPerPage) + 1} to {Math.min((pagination.page || 1) * (pagination.page_size || itemsPerPage), pagination.total_records || 0)} of {pagination.total_records || 0} entries
             </span>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <label className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm whitespace-nowrap">Show:</label>
               <div className="w-full sm:w-40">
                 <CustomDropdown
                   value={itemsPerPage}
-                  onChange={setItemsPerPage}
+                  onChange={handlePageSizeChange}
                   options={entriesOptions}
-                  placeholder="25 entries"
+                  placeholder="50 entries"
                   showSearch={false}
                 />
               </div>
@@ -886,9 +921,20 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
 
             {/* Pagination Controls */}
             <div className="flex items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
+              {/* Go to First Page */}
+              <button
+                onClick={handleGoToFirstPage}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 dark:text-gray-300"
+                title="Go to first page"
+              >
+                First
+              </button>
+
+              {/* Previous Page */}
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
+                disabled={!pagination.has_previous}
                 className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -926,7 +972,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                disabled={!pagination.has_next}
                 className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

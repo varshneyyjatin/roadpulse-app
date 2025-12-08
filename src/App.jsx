@@ -9,6 +9,7 @@ import Reports from './components/reports/Reports';
 import Watchlist from './components/watchlist/Watchlist';
 import Drivers from './components/drivers/Drivers';
 import Configurations from './components/configurations/Configurations';
+import Notifications from './components/notifications/Notifications';
 import Toast from './components/common/Toast';
 import { FullPageLoader } from './components/common/Loader';
 import './App.css';
@@ -114,6 +115,8 @@ const AppContent = () => {
         return <Drivers />;
       case 'Configurations':
         return <Configurations />;
+      case 'Notifications':
+        return <Notifications />;
       default:
         return <Dashboard />;
     }

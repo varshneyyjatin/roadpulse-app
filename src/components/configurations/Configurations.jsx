@@ -110,7 +110,7 @@ const Configurations = () => {
         description={getPageDescription()}
       />
       
-      <div className="max-w-7xl mx-auto px-6 pb-8">
+      <div className="max-w-7xl mx-auto pb-6 px-6">
         {/* Breadcrumb Navigation */}
         {activePage !== 'overview' && (
           <nav className="mb-6 flex items-center gap-2 text-sm">

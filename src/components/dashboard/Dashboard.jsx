@@ -46,18 +46,22 @@ const Dashboard = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDatePicker]);
 
-  const fetchDashboardData = async (filters = appliedFilters) => {
+  const fetchDashboardData = async (filters = appliedFilters, page = 1, pageSize = 50) => {
     try {
-      setLoading(true);
+      // Only show full page loader on initial load
+      if (!dashboardData) {
+        setLoading(true);
+      }
       setError(null);
-      const token = localStorage.getItem('access_token');
 
       const requestBody = {
         scope: 'dashboard',
         location_ids: filters.location_ids,
         checkpoint_ids: filters.checkpoint_ids,
         start_date: filters.start_date,
-        end_date: filters.end_date
+        end_date: filters.end_date,
+        page: page,
+        page_size: pageSize
       };
 
       const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/vehicle-logs`, {
@@ -91,23 +95,23 @@ const Dashboard = () => {
 
     // If no filters applied, show today's date
     if (!start_date && !end_date) {
-      return `Records: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+      return `Date Range: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
     }
 
     // Build filter text with date range
     if (start_date && end_date) {
       const startFormatted = new Date(start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
       const endFormatted = new Date(end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `Records: ${startFormatted} - ${endFormatted}`;
+      return `Date Range: ${startFormatted} - ${endFormatted}`;
     } else if (start_date) {
       const startFormatted = new Date(start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `Records: From ${startFormatted}`;
+      return `Date Range: From ${startFormatted}`;
     } else if (end_date) {
       const endFormatted = new Date(end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `Records: Until ${endFormatted}`;
+      return `Date Range: Until ${endFormatted}`;
     }
 
-    return `Records: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+    return `Date Range: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
   };
 
 
@@ -141,14 +145,17 @@ const Dashboard = () => {
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-6">
               {/* Left Section - Greeting & Company Name Badge */}
               <div className="flex-1 w-full lg:w-auto">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2 md:mb-3">
-                  {(() => {
-                    const hour = new Date().getHours();
-                    if (hour < 12) return 'Good Morning';
-                    if (hour < 16) return 'Good Afternoon';
-                    if (hour < 22) return 'Good Evening';
-                    return 'Good Night';
-                  })()}, {user?.name || 'User'}! 
+                <h1 className="text-xl sm:text-2xl md:text-3xl text-gray-900 dark:text-white mb-2 md:mb-3">
+                  <span className="font-normal">
+                    {(() => {
+                      const hour = new Date().getHours();
+                      if (hour < 12) return 'Good Morning';
+                      if (hour < 16) return 'Good Afternoon';
+                      if (hour < 22) return 'Good Evening';
+                      return 'Good Night';
+                    })()},
+                  </span>{' '}
+                  <span className="font-bold">{user?.name || 'User'}</span>
                 </h1>
                 {user?.company_name && (
                   <div className="inline-flex items-center gap-1 py-1.5 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -395,6 +402,7 @@ const Dashboard = () => {
                   canFixVehicleNumber={hasPermissionForComponent('Dashboard', 'comp005', 'can_view')}
                   canDownloadImage={hasPermissionForComponent('Dashboard', 'comp006', 'can_view')}
                   onDataRefresh={fetchDashboardData}
+                  onPageChange={(page, pageSize) => fetchDashboardData(appliedFilters, page, pageSize)}
                 />
               );
             }
