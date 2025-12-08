@@ -1,15 +1,15 @@
-const PageHeader = ({ title, description, icon }) => {
+const PageHeader = ({ title, description }) => {
   return (
-    <div>
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
-            {title}
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+    <div className="max-w-7xl mx-auto px-6 pt-6 pb-5">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 tracking-tight">
+          {title}
+        </h1>
+        {description && (
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
             {description}
           </p>
-        </div>
+        )}
       </div>
     </div>
   );

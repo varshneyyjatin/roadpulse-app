@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAccessControl } from '../../contexts/AccessControl';
 import TabSequenceModal from './TabSequenceModal';
 import { saveTabOrder } from '../../utils/tabOrderStorage';
+import { fetchWithAuth } from '../../utils/fetchWrapper';
 
 const Navbar = ({ setActiveTab, onLogout }) => {
   const { user, accessControl, selectedLocation, setSelectedLocation, logout } = useAccessControl();
@@ -14,6 +15,9 @@ const Navbar = ({ setActiveTab, onLogout }) => {
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [mobileLocationSearchQuery, setMobileLocationSearchQuery] = useState('');
   const [showAlertDropdown, setShowAlertDropdown] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
@@ -52,6 +56,65 @@ const Navbar = ({ setActiveTab, onLogout }) => {
       return (names[0][0] + names[1][0]).toUpperCase();
     }
     return user.username.substring(0, 2).toUpperCase();
+  };
+
+  // Fetch notifications
+  const fetchNotifications = async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setNotificationsLoading(true);
+      }
+      const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/notifications/my-notifications?nav_notification=true`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications');
+      }
+      
+      const data = await response.json();
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unread_count || 0);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setNotifications([]);
+      setUnreadCount(0);
+    } finally {
+      if (showLoading) {
+        setNotificationsLoading(false);
+      }
+    }
+  };
+
+  // Fetch notification count on mount
+  useEffect(() => {
+    fetchNotifications(false); // Fetch without showing loader on initial load
+    
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(() => {
+      fetchNotifications(false);
+    }, 30000);
+
+    // Listen for notification updates from Notifications page
+    const handleNotificationsUpdate = () => {
+      // Add small delay to ensure backend has processed the update
+      setTimeout(() => {
+        fetchNotifications(false);
+      }, 200);
+    };
+    window.addEventListener('notificationsUpdated', handleNotificationsUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notificationsUpdated', handleNotificationsUpdate);
+    };
+  }, []);
+
+  // Handle notification icon click
+  const handleNotificationClick = () => {
+    setShowAlertDropdown(!showAlertDropdown);
+    if (!showAlertDropdown) {
+      // Refresh notifications when opening dropdown
+      fetchNotifications(true);
+    }
   };
 
   // Handle logout - clear all storage
@@ -142,36 +205,125 @@ const Navbar = ({ setActiveTab, onLogout }) => {
             
             {/* Desktop: All buttons */}
             <div className="hidden md:flex items-center gap-4">
+              {/* Notification Icon - Only show if user has access to Notifications tab */}
+              {accessControl?.tabs?.some(tab => tab.tab_name === 'Notifications') && (
               <div className="relative">
                 <button 
                   ref={alertButtonRef}
-                  onClick={() => setShowAlertDropdown(!showAlertDropdown)}
+                  onClick={handleNotificationClick}
                   className="relative w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 hover:shadow-md transition"
                 >
                   <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                   </svg>
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold">0</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
 
-                {/* Alert Dropdown */}
+                {/* Alert Dropdown - Professional & Clean */}
                 {showAlertDropdown && (
-                  <div ref={alertDropdownRef} className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50">
-                    <div className="p-4 border-b border-gray-200 dark:border-slate-700">
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">Notifications</h3>
-                    </div>
-                    <div className="p-8 text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                        </svg>
+                  <div ref={alertDropdownRef} className="absolute right-0 mt-2 w-[380px] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 max-h-[500px] overflow-hidden flex flex-col animate-fadeIn">
+                    {/* Clean Professional Header */}
+                    <div className="px-4 py-3.5 bg-gradient-to-r from-gray-50 to-blue-50/50 dark:from-slate-700 dark:to-slate-700 border-b border-gray-200 dark:border-slate-600">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                            </svg>
+                          </div>
+                          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Notifications</h3>
+                        </div>
+                        {unreadCount > 0 && (
+                          <span className="px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-sm">
+                            {unreadCount}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No new alerts</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">You're all caught up!</p>
                     </div>
+                    
+                    {notificationsLoading ? (
+                      <div className="p-8 text-center">
+                        <div className="w-10 h-10 border-3 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin mx-auto mb-3"></div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-16 h-16 mx-auto mb-3 bg-gray-100 dark:bg-slate-700 rounded-xl flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                          </svg>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">All Clear!</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">No new notifications</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="overflow-y-auto flex-1 max-h-[380px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent">
+                          {notifications.map((notification, index) => (
+                            <div 
+                              key={index}
+                              onClick={() => {
+                                setShowAlertDropdown(false);
+                                setActiveTab('Notifications');
+                              }}
+                              className="group p-3.5 border-b border-gray-100 dark:border-slate-700 last:border-b-0 hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-all duration-200 cursor-pointer"
+                            >
+                              <div className="flex items-start gap-3">
+                                {/* Clean Icon */}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                  notification.notification_type === 'watchlist_alert' 
+                                    ? 'bg-red-100 dark:bg-red-900/30' 
+                                    : 'bg-blue-100 dark:bg-blue-900/30'
+                                }`}>
+                                  {notification.notification_type === 'watchlist_alert' ? (
+                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1 leading-tight">
+                                    {notification.title}
+                                  </p>
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-snug line-clamp-2">
+                                    {notification.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Clean View All Button */}
+                        <div className="p-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/30">
+                          <button 
+                            onClick={() => {
+                              setShowAlertDropdown(false);
+                              setActiveTab('Notifications');
+                            }}
+                            className="w-full py-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <span>View All Notifications</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
+              )}
               
               <button onClick={() => setShowSettingsModal(!showSettingsModal)} className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 hover:shadow-md transition">
                 <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">

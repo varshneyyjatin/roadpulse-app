@@ -6,10 +6,11 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
 
-  // Calculate counts from summary_data (filtered results)
-  const summaryData = data?.summary_data || [];
-  const totalVehiclesInView = summaryData.length;
-  const blacklistedInView = summaryData.filter(log => log.is_blacklisted).length;
+  // Use backend data directly
+  const totalVehiclesInView = data?.total_vehicles || 0;
+  const blacklistedInView = data?.blacklisted_vehicle_count || 0;
+  const totalLocations = data?.total_locations || 0;
+  const totalCameras = data?.total_cameras || 0;
 
   // Check if date filter is applied
   const hasDateFilter = appliedFilters?.start_date || appliedFilters?.end_date;
