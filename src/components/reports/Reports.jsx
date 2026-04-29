@@ -1309,7 +1309,7 @@ const Reports = () => {
                 {!similarLoading && !similarError && similarPlateQuery.trim() && filteredSimilarResults.length === 0 && (
                   <div className="p-4 text-center bg-gray-50 dark:bg-slate-700/20 rounded-lg border border-gray-200 dark:border-slate-700">
                     <p className="text-sm text-gray-600 dark:text-gray-400">  
-                      No plates found with {similarityThreshold}% similarity.
+                      No plates found. 
                     </p>
                   </div>
                 )}
@@ -1411,7 +1411,7 @@ const Reports = () => {
         )}
 
         {/* No Data State - Show when report is generated but has no data */}
-        {!loading && reportData && reportData.summary_data && reportData.summary_data.length === 0 && (
+        {!loading && reportData && reportData.summary_data && reportData.summary_data.length === 0 && activeTab === 'report' && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 mb-8">
             <div className="flex flex-col items-center justify-center text-center">
               <div className="opacity-40 grayscale">
