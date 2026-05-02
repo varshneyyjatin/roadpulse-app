@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import LocationDetailsModal from './LocationDetailsModal';
 import CameraDetailsModal from './CameraDetailsModal';
+import BlacklistDetailsModal from './BlacklistDetailsModal';
 
 const DashboardKpis = ({ data, appliedFilters, locations }) => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
+  const [showBlacklistModal, setShowBlacklistModal] = useState(false);
 
   // Use backend data directly
   const totalVehiclesInView = data?.total_vehicles || 0;
@@ -28,6 +30,11 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
         isOpen={showCameraModal} 
         onClose={() => setShowCameraModal(false)} 
         locations={locations}
+      />
+      <BlacklistDetailsModal 
+        isOpen={showBlacklistModal} 
+        onClose={() => setShowBlacklistModal(false)} 
+        appliedFilters={appliedFilters}
       />
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 mb-8 overflow-hidden">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -125,7 +132,10 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
         </div>
 
         {/* Blacklisted Vehicles */}
-        <div className="p-6 relative group hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 hover:shadow-xl">
+        <div 
+          onClick={() => setShowBlacklistModal(true)}
+          className="p-6 relative group hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 hover:shadow-xl cursor-pointer"
+        >
           <div className="flex flex-col gap-4">
             <div className="flex items-start justify-between">
               <div className="w-14 h-14 bg-gradient-to-br from-red-400 to-red-500 dark:from-red-600 dark:to-red-700 rounded-xl flex items-center justify-center shadow-sm shadow-red-500/20 group-hover:scale-110 transition-transform duration-300">
