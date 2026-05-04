@@ -306,13 +306,20 @@ const Reports = () => {
   const [datePickerError, setDatePickerError] = useState(null);
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [isWhitelisted, setIsWhitelisted] = useState(false);
-  
+  const [similarPlateQuery, setSimilarPlateQuery] = useState('');
+  const [similarResults, setSimilarResults] = useState({});
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarError, setSimilarError] = useState(null);
+  const [similarityThreshold, setSimilarityThreshold] = useState(25);
+  const [activeSection, setActiveSection] = useState(null);
+  const [activeTab, setActiveTab] = useState('report');
+
   // Dropdown states for multi-select
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showCheckpointDropdown, setShowCheckpointDropdown] = useState(false);
   const locationDropdownRef = useRef(null);
   const checkpointDropdownRef = useRef(null);
-  
+
   const datePickerRef = useRef(null);
   const dateButtonRef = useRef(null);
 
@@ -340,6 +347,10 @@ const Reports = () => {
     value: loc.location_id,
     label: loc.location_name
   }));
+
+  const filteredSimilarResults = useMemo(() => {
+    return similarResults[similarityThreshold] || [];
+  }, [similarResults, similarityThreshold]);
 
   // Get checkpoints based on selected locations
   const checkpointOptions = useMemo(() => {
@@ -420,7 +431,7 @@ const Reports = () => {
 
   const handleGenerateReport = async () => {
     console.log('Generate Report clicked', { selectedLocations, selectedCheckpoints, plateNumber, startDate, endDate, isBlacklisted, isWhitelisted });
-    
+
     // Validations - both dates required if any date is selected
     if ((startDate && !endDate) || (!startDate && endDate)) {
       setError({ title: 'Validation Error', message: 'Please select both start and end dates' });
@@ -457,6 +468,7 @@ const Reports = () => {
     try {
       setLoading(true);
       setError(null);
+      setActiveSection('report');
 
       // Prepare request body
       const requestBody = {
@@ -469,7 +481,7 @@ const Reports = () => {
         page: currentPage,
         page_size: itemsPerPage
       };
-      
+
       // Only add blacklist/whitelist if checked
       if (isBlacklisted) {
         requestBody.is_blacklisted = true;
@@ -507,6 +519,60 @@ const Reports = () => {
     }
   };
 
+  const fetchSimilarPlates = async (query = similarPlateQuery) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setSimilarResults({});
+      setSimilarError(null);
+      setSimilarLoading(false);
+      return;
+    }
+  
+    try {
+      setSimilarLoading(true);
+      setLoading(true);
+      setSimilarError(null);
+
+      const response = await fetchWithAuth(
+        `${import.meta.env.VITE_API_BASE_URL}/dashboard/similar-vehicles?plate=${trimmedQuery}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch similar plates');
+      }
+
+      const data = await response.json();
+      // Data is now an object with keys: "25", "50", "75", "100"
+      setActiveSection('similar');
+      setSimilarResults(data);
+    } catch (err) {
+      
+
+      setSimilarError('Failed to fetch similar plates');
+      setSimilarResults({});
+    } finally {
+      setSimilarLoading(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const trimmedQuery = similarPlateQuery.trim();
+
+    if (!trimmedQuery) {
+      setSimilarResults({});
+      setSimilarError(null);
+      setSimilarLoading(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      fetchSimilarPlates(trimmedQuery);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [similarPlateQuery]);
+
   // Filter and search logic
   const filteredLogs = useMemo(() => {
     if (!reportData?.summary_data) return [];
@@ -526,7 +592,7 @@ const Reports = () => {
   const getPlateImage = (log) => {
     // Direct URL from API response - check both possible field names
     const plateImageUrl = log.latest_data_number_plate_image || log.number_plate_image;
-    
+
     if (plateImageUrl) {
       console.log('🖼️ Plate Image URL:', plateImageUrl);
       return plateImageUrl;
@@ -538,7 +604,7 @@ const Reports = () => {
   const getVehicleImage = (log) => {
     // Direct URL from API response - check both possible field names
     const vehicleImageUrl = log.latest_data_vehicle_image || log.vehicle_image;
-    
+
     if (vehicleImageUrl) {
       console.log('🚗 Vehicle Image URL:', vehicleImageUrl);
       return vehicleImageUrl;
@@ -596,6 +662,11 @@ const Reports = () => {
     }
   }, [currentPage, itemsPerPage]);
 
+  // Log activeTab changes
+  useEffect(() => {
+    console.log('📊 activeTab changed to:', activeTab);
+  }, [activeTab]);
+
   // Handle Excel Export via API with Smooth Progress
   const handleExcelExport = async () => {
     try {
@@ -612,7 +683,7 @@ const Reports = () => {
         end_date: endDate || null,
         excel_report: true  // This triggers Excel download from API
       };
-      
+
       // Only add blacklist/whitelist if checked
       if (isBlacklisted) {
         requestBody.is_blacklisted = true;
@@ -649,16 +720,16 @@ const Reports = () => {
 
       // Get the blob from response
       const blob = await response.blob();
-      
+
       // Clear interval and set to 95%
       clearInterval(progressInterval);
       setExportProgress(95);
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
+
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().split('T')[0];
       link.download = `vehicle-report-${timestamp}.xlsx`;
@@ -699,6 +770,618 @@ const Reports = () => {
       {/* Main Content Container */}
       <div className="max-w-7xl mx-auto pb-6 px-6">
 
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-slate-700">
+          <button
+            onClick={() => {
+              setActiveTab('report');
+              setActiveSection('report');
+              console.log('✅ activeTab set to:', 'report');
+            }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${activeTab === 'report'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-white'
+              }`}
+          >
+            Filter Reports
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('similar');
+              setActiveSection('similar');
+            }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${activeTab === 'similar'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-white'
+              }`}
+          >
+            Similar Plates
+          </button>
+        </div>
+
+        {activeTab === 'report' && (
+          <div>
+            {/* Filter Section */}
+            {/* {!loading && ( */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 mb-8">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Filter Reports</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                  {/* Plate Number Input */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Plate Number
+                    </label>
+                    <input
+                      type="text"
+                      value={plateNumber}
+                      onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
+                      placeholder="e.g. DL3CBR1119"
+                      className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  {/* Date Range Picker */}
+                  <div className="relative">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Date Range
+                    </label>
+                    <button
+                      ref={dateButtonRef}
+                      onClick={() => setShowDatePicker(!showDatePicker)}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all cursor-pointer"
+                    >
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className={`text-sm flex-1 text-left ${startDate && endDate ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
+                        {getFilterDisplayText()}
+                      </span>
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Date Range Picker Dropdown */}
+                    {showDatePicker && (
+                      <div ref={datePickerRef} className="absolute left-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-4">
+                        {/* Calendar Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <button
+                            onClick={() => {
+                              const newMonth = new Date(currentMonth);
+                              newMonth.setMonth(newMonth.getMonth() - 1);
+                              setCurrentMonth(newMonth);
+                            }}
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">
+                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newMonth = new Date(currentMonth);
+                              newMonth.setMonth(newMonth.getMonth() + 1);
+                              setCurrentMonth(newMonth);
+                            }}
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Calendar Grid */}
+                        <div className="grid grid-cols-7 gap-1 mb-4">
+                          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                            <div key={day} className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 py-2">
+                              {day}
+                            </div>
+                          ))}
+
+                          {(() => {
+                            const year = currentMonth.getFullYear();
+                            const month = currentMonth.getMonth();
+                            const firstDay = new Date(year, month, 1).getDay();
+                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                            const days = [];
+
+                            const today = new Date();
+                            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                            for (let i = 0; i < firstDay; i++) {
+                              days.push(<div key={`empty-${i}`} />);
+                            }
+
+                            for (let day = 1; day <= daysInMonth; day++) {
+                              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                              const isStart = startDate === dateStr;
+                              const isEnd = endDate === dateStr;
+                              const isInRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
+                              const isToday = dateStr === todayStr;
+
+                              days.push(
+                                <button
+                                  key={day}
+                                  onClick={() => {
+                                    setDatePickerError(null);
+                                    if (!startDate || (startDate && endDate)) {
+                                      setStartDate(dateStr);
+                                      setEndDate(null);
+                                    } else if (dateStr < startDate) {
+                                      setEndDate(startDate);
+                                      setStartDate(dateStr);
+                                    } else {
+                                      const start = new Date(startDate);
+                                      const end = new Date(dateStr);
+                                      const diffTime = end - start;
+                                      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+                                      if (diffDays >= 90) {
+                                        setDatePickerError('You cannot select more than 90 days');
+                                        return;
+                                      }
+
+                                      setEndDate(dateStr);
+                                    }
+                                  }}
+                                  className={`aspect-square flex items-center justify-center text-sm rounded-lg transition-colors relative ${isStart || isEnd
+                                      ? 'bg-blue-600 text-white font-bold'
+                                      : isInRange
+                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                        : isToday
+                                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold ring-2 ring-green-500 dark:ring-green-600'
+                                          : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                >
+                                  {day}
+                                </button>
+                              );
+                            }
+
+                            return days;
+                          })()}
+                        </div>
+
+                        {/* Date Range Error */}
+                        {datePickerError && (
+                          <div className="mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              <p className="text-xs text-red-700 dark:text-red-400 font-medium">
+                                {datePickerError}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-slate-700">
+                          <button
+                            onClick={() => {
+                              setStartDate(null);
+                              setEndDate(null);
+                              setDatePickerError(null);
+                            }}
+                            className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!startDate || !endDate) {
+                                setDatePickerError('Please select both start and end dates');
+                                return;
+                              }
+
+                              const start = new Date(startDate);
+                              const end = new Date(endDate);
+                              const today = new Date();
+                              today.setHours(23, 59, 59, 999);
+
+                              if (start > end) {
+                                setDatePickerError('Start date must be before or equal to end date');
+                                return;
+                              }
+
+                              if (end > today) {
+                                setDatePickerError('End date cannot be in the future');
+                                return;
+                              }
+
+                              const diffTime = end - start;
+                              const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                              if (diffDays >= 90) {
+                                setDatePickerError('Date range cannot exceed 90 days');
+                                return;
+                              }
+
+                              setDatePickerError(null);
+                              setShowDatePicker(false);
+                            }}
+                            disabled={!startDate || !endDate}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Location Filter - Multi-select */}
+                  <div className="relative">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Locations
+                    </label>
+                    <div ref={locationDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
+                      >
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className={`text-sm flex-1 text-left ${selectedLocations.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
+                          {selectedLocations.length === 0 ? 'All Locations' : `${selectedLocations.length} selected`}
+                        </span>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {showLocationDropdown && (
+                        <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
+                          <div className="p-2">
+                            {locationOptions.map((location) => (
+                              <label
+                                key={location.value}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLocations.includes(location.value)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedLocations([...selectedLocations, location.value]);
+                                    } else {
+                                      setSelectedLocations(selectedLocations.filter(id => id !== location.value));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-900 dark:text-white">{location.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Checkpoint Filter - Multi-select */}
+                  <div className="relative">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Checkpoints
+                    </label>
+                    <div ref={checkpointDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowCheckpointDropdown(!showCheckpointDropdown)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
+                      >
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span className={`text-sm flex-1 text-left ${selectedCheckpoints.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
+                          {selectedCheckpoints.length === 0 ? 'All Checkpoints' : `${selectedCheckpoints.length} selected`}
+                        </span>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {showCheckpointDropdown && (
+                        <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
+                          <div className="p-2">
+                            {checkpointOptions.length > 0 ? (
+                              checkpointOptions.map((checkpoint) => (
+                                <label
+                                  key={checkpoint.value}
+                                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCheckpoints.includes(checkpoint.value)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedCheckpoints([...selectedCheckpoints, checkpoint.value]);
+                                      } else {
+                                        setSelectedCheckpoints(selectedCheckpoints.filter(id => id !== checkpoint.value));
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1">
+                                    <span className="text-sm text-gray-900 dark:text-white">{checkpoint.label}</span>
+                                    {checkpoint.locationName && (
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({checkpoint.locationName})</span>
+                                    )}
+                                  </div>
+                                </label>
+                              ))
+                            ) : (
+                              <div className="px-4 py-8 text-center">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No checkpoints available</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Generate Button */}
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleGenerateReport}
+                      className="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Generate
+                    </button>
+                  </div>
+                </div>
+
+                {/* Watchlist Filters - Custom Checkbox Design */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Show:</span>
+
+                    {/* Blacklist Checkbox */}
+                    <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-all group">
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={isBlacklisted}
+                          onChange={(e) => setIsBlacklisted(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-red-600 peer-checked:border-red-600 transition-all duration-200 flex items-center justify-center">
+                          <svg className={`w-3 h-3 text-white transition-all duration-200 ${isBlacklisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <span className={`text-sm font-medium transition-colors ${isBlacklisted ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-400'}`}>
+                        Blacklisted
+                      </span>
+                    </label>
+
+                    {/* Whitelist Checkbox */}
+                    <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-green-300 dark:hover:border-green-700 transition-all group">
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={isWhitelisted}
+                          onChange={(e) => setIsWhitelisted(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-green-600 peer-checked:border-green-600 transition-all duration-200 flex items-center justify-center">
+                          <svg className={`w-3 h-3 text-white transition-all duration-200 ${isWhitelisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <span className={`text-sm font-medium transition-colors ${isWhitelisted ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400'}`}>
+                        Whitelisted
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Clear Filters Button - Only show when report is generated */}
+                  {reportData && (
+                    <button
+                      onClick={() => {
+                        setPlateNumber('');
+                        setStartDate(null);
+                        setEndDate(null);
+                        setSelectedLocations([]);
+                        setSelectedCheckpoints([]);
+                        setIsBlacklisted(false);
+                        setIsWhitelisted(false);
+                        setDatePickerError(null);
+                        setReportData(null);
+                        setError(null);
+                      }}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            {/* // )} */}
+          </div>
+        )}
+
+
+        {activeTab === 'similar' && (
+              <div>
+                {/* Similar Plate Search - NOW INSIDE THE SAME CARD */}
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 ml-4 mt-2">
+                  Find Similar Plate Numbers
+                </h3>
+                {/* Search and Slider - Side by Side */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                  {/* Input - Trigger search on Enter */}
+                  <div className="flex flex-col">
+                    <input
+                      type="text"
+                      value={similarPlateQuery}
+                      onChange={(e) => setSimilarPlateQuery(e.target.value.toUpperCase())}
+                      placeholder="Enter plate number (e.g. DL3CBR1119)"
+                      className="w-full px-4 py-1 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all h-full"
+                    />
+                  </div>
+
+                  {/* Similarity Slider with Markers */}
+                  <div className="flex flex-col justify-center">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Similarity
+                      </label>
+                      <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                        {similarityThreshold}%
+                      </span>
+                    </div>
+
+
+                    {/* Slider */}
+                    <input
+                      type="range"
+                      min="25"
+                      max="100"
+                      step="1"
+                      value={similarityThreshold}
+                      disabled={!similarPlateQuery.trim()}
+                      onChange={(e) => {
+                        const rawValue = Number(e.target.value); 
+                        setSimilarityThreshold((prev) => {
+                        if (rawValue > prev) {
+                          return Math.min(100, prev + 25);
+                        }
+
+                        if (rawValue < prev) {
+                          return Math.max(25, prev - 25);
+                        }
+
+                        return prev;
+                      });
+                      }}
+                      className={`w-full h-2 rounded-lg appearance-none transition-all mb-1 ${!similarPlateQuery.trim()
+                          ? 'bg-gray-200 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                          : 'bg-gray-300 dark:bg-slate-600 cursor-pointer accent-blue-600'
+                        }`}
+                    />
+
+                    {/* Percentage Markers */}
+                    <div className="flex justify-between px-0 text-xs text-gray-600 dark:text-gray-400">
+                      <span>25%</span>
+                      <span>50%</span>
+                      <span>75%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Results Section */}
+                {similarLoading && (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="text-center">
+                      <div className="w-6 h-6 border-3 border-blue-200 dark:border-blue-800 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Searching similar plates...</p>
+                    </div>
+                  </div>
+                )}
+
+                {similarError && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                    <p className="text-sm text-red-700 dark:text-red-400 font-medium">{similarError}</p>
+                  </div>
+                )}
+
+                {!similarLoading && !similarError && similarPlateQuery.trim() && filteredSimilarResults.length === 0 && (
+                  <div className="p-4 text-center bg-gray-50 dark:bg-slate-700/20 rounded-lg border border-gray-200 dark:border-slate-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">  
+                      No plates found. 
+                    </p>
+                  </div>
+                )}
+
+                {/* Results Count */}
+                {activeTab === 'similar' && filteredSimilarResults.length > 0 && (
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 ml-4 mb-3">
+                    {filteredSimilarResults.length} similar plate{filteredSimilarResults.length !== 1 ? 's' : ''} found
+                  </p>
+                )}
+
+                {/* Results Table List */}
+                {activeTab === 'similar' && filteredSimilarResults.length > 0 && (
+                  <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 dark:bg-slate-700/30 border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
+                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Checkpoint</th>
+                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
+                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Plate Number</th>
+                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Number Plate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSimilarResults.map((item, index) => {
+                          const date = new Date(item.last_seen);
+                          const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                          const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                          return (
+                            <tr
+                              key={index}
+                              className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                            >
+                              <td className="py-5 px-6">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">{item.location || 'N/A'}</span>
+                              </td>
+                              <td className="py-5 px-6">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{item.checkpoint_name || item.checkpoint || 'N/A'}</span>
+                              </td>
+                              <td className="py-5 px-6">
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  <div className="font-medium">{formattedDate}</div>
+                                  <div className="text-gray-600 dark:text-gray-400">{formattedTime}</div>
+                                </div>
+                              </td>
+                              <td className="py-5 px-6">
+                                <span className="text-sm font-bold text-gray-900 dark:text-white font-mono">{item.plate_number}</span>
+                              </td>
+                              <td className="py-5 px-6">
+                                <img
+                                  src={item.plate_image || item.number_plate_image || '/placeholder-plate.svg'}
+                                  alt="Plate"
+                                  onError={(e) => {
+                                    console.error('Failed to load plate image, using placeholder');
+                                    e.target.src = '/placeholder-plate.svg';
+                                  }}
+                                  crossOrigin="anonymous"
+                                  className="w-32 h-16 object-contain rounded border border-gray-200 dark:border-slate-700 hover:opacity-80 transition-opacity"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+        )}
+
         {/* Loading State */}
         {loading && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 mb-8">
@@ -708,423 +1391,6 @@ const Reports = () => {
               <p className="text-gray-600 dark:text-gray-400 max-w-md">
                 Please wait while we fetch your data...
               </p>
-            </div>
-          </div>
-        )}
-
-        {/* Filter Section */}
-        {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 mb-8">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Filter Reports</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-              {/* Plate Number Input */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Plate Number
-                </label>
-                <input
-                  type="text"
-                  value={plateNumber}
-                  onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. DL3CBR1119"
-                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              {/* Date Range Picker */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Date Range
-                </label>
-                <button
-                  ref={dateButtonRef}
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all cursor-pointer"
-                >
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className={`text-sm flex-1 text-left ${startDate && endDate ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                    {getFilterDisplayText()}
-                  </span>
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {/* Date Range Picker Dropdown */}
-                {showDatePicker && (
-                  <div ref={datePickerRef} className="absolute left-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-4">
-                    {/* Calendar Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <button
-                        onClick={() => {
-                          const newMonth = new Date(currentMonth);
-                          newMonth.setMonth(newMonth.getMonth() - 1);
-                          setCurrentMonth(newMonth);
-                        }}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </div>
-                      <button
-                        onClick={() => {
-                          const newMonth = new Date(currentMonth);
-                          newMonth.setMonth(newMonth.getMonth() + 1);
-                          setCurrentMonth(newMonth);
-                        }}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div className="grid grid-cols-7 gap-1 mb-4">
-                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                        <div key={day} className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 py-2">
-                          {day}
-                        </div>
-                      ))}
-
-                      {(() => {
-                        const year = currentMonth.getFullYear();
-                        const month = currentMonth.getMonth();
-                        const firstDay = new Date(year, month, 1).getDay();
-                        const daysInMonth = new Date(year, month + 1, 0).getDate();
-                        const days = [];
-
-                        const today = new Date();
-                        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-                        for (let i = 0; i < firstDay; i++) {
-                          days.push(<div key={`empty-${i}`} />);
-                        }
-
-                        for (let day = 1; day <= daysInMonth; day++) {
-                          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const isStart = startDate === dateStr;
-                          const isEnd = endDate === dateStr;
-                          const isInRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
-                          const isToday = dateStr === todayStr;
-
-                          days.push(
-                            <button
-                              key={day}
-                              onClick={() => {
-                                setDatePickerError(null);
-                                if (!startDate || (startDate && endDate)) {
-                                  setStartDate(dateStr);
-                                  setEndDate(null);
-                                } else if (dateStr < startDate) {
-                                  setEndDate(startDate);
-                                  setStartDate(dateStr);
-                                } else {
-                                  const start = new Date(startDate);
-                                  const end = new Date(dateStr);
-                                  const diffTime = end - start;
-                                  const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-                                  if (diffDays >= 90) {
-                                    setDatePickerError('You cannot select more than 90 days');
-                                    return;
-                                  }
-
-                                  setEndDate(dateStr);
-                                }
-                              }}
-                              className={`aspect-square flex items-center justify-center text-sm rounded-lg transition-colors relative ${
-                                isStart || isEnd
-                                  ? 'bg-blue-600 text-white font-bold'
-                                  : isInRange
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                                  : isToday
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold ring-2 ring-green-500 dark:ring-green-600'
-                                  : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
-                              }`}
-                            >
-                              {day}
-                            </button>
-                          );
-                        }
-
-                        return days;
-                      })()}
-                    </div>
-
-                    {/* Date Range Error */}
-                    {datePickerError && (
-                      <div className="mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          <p className="text-xs text-red-700 dark:text-red-400 font-medium">
-                            {datePickerError}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-slate-700">
-                      <button
-                        onClick={() => {
-                          setStartDate(null);
-                          setEndDate(null);
-                          setDatePickerError(null);
-                        }}
-                        className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!startDate || !endDate) {
-                            setDatePickerError('Please select both start and end dates');
-                            return;
-                          }
-
-                          const start = new Date(startDate);
-                          const end = new Date(endDate);
-                          const today = new Date();
-                          today.setHours(23, 59, 59, 999);
-
-                          if (start > end) {
-                            setDatePickerError('Start date must be before or equal to end date');
-                            return;
-                          }
-
-                          if (end > today) {
-                            setDatePickerError('End date cannot be in the future');
-                            return;
-                          }
-
-                          const diffTime = end - start;
-                          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-                          if (diffDays >= 90) {
-                            setDatePickerError('Date range cannot exceed 90 days');
-                            return;
-                          }
-
-                          setDatePickerError(null);
-                          setShowDatePicker(false);
-                        }}
-                        disabled={!startDate || !endDate}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Location Filter - Multi-select */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Locations
-                </label>
-                <div ref={locationDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className={`text-sm flex-1 text-left ${selectedLocations.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                      {selectedLocations.length === 0 ? 'All Locations' : `${selectedLocations.length} selected`}
-                    </span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {showLocationDropdown && (
-                    <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
-                      <div className="p-2">
-                        {locationOptions.map((location) => (
-                          <label
-                            key={location.value}
-                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedLocations.includes(location.value)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedLocations([...selectedLocations, location.value]);
-                                } else {
-                                  setSelectedLocations(selectedLocations.filter(id => id !== location.value));
-                                }
-                              }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-900 dark:text-white">{location.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Checkpoint Filter - Multi-select */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Checkpoints
-                </label>
-                <div ref={checkpointDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCheckpointDropdown(!showCheckpointDropdown)}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span className={`text-sm flex-1 text-left ${selectedCheckpoints.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                      {selectedCheckpoints.length === 0 ? 'All Checkpoints' : `${selectedCheckpoints.length} selected`}
-                    </span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {showCheckpointDropdown && (
-                    <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
-                      <div className="p-2">
-                        {checkpointOptions.length > 0 ? (
-                          checkpointOptions.map((checkpoint) => (
-                            <label
-                              key={checkpoint.value}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedCheckpoints.includes(checkpoint.value)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedCheckpoints([...selectedCheckpoints, checkpoint.value]);
-                                  } else {
-                                    setSelectedCheckpoints(selectedCheckpoints.filter(id => id !== checkpoint.value));
-                                  }
-                                }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                              />
-                              <div className="flex-1">
-                                <span className="text-sm text-gray-900 dark:text-white">{checkpoint.label}</span>
-                                {checkpoint.locationName && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({checkpoint.locationName})</span>
-                                )}
-                              </div>
-                            </label>
-                          ))
-                        ) : (
-                          <div className="px-4 py-8 text-center">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No checkpoints available</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Generate Button */}
-              <div className="flex items-end">
-                <button
-                  onClick={handleGenerateReport}
-                  className="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Generate
-                </button>
-              </div>
-            </div>
-
-            {/* Watchlist Filters - Custom Checkbox Design */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-slate-700">
-              <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Show:</span>
-              
-              {/* Blacklist Checkbox */}
-              <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-all group">
-                <div className="relative flex items-center justify-center">
-                  <input
-                    type="checkbox"
-                    checked={isBlacklisted}
-                    onChange={(e) => setIsBlacklisted(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-red-600 peer-checked:border-red-600 transition-all duration-200 flex items-center justify-center">
-                    <svg className={`w-3 h-3 text-white transition-all duration-200 ${isBlacklisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-                <span className={`text-sm font-medium transition-colors ${isBlacklisted ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-400'}`}>
-                  Blacklisted
-                </span>
-              </label>
-
-                {/* Whitelist Checkbox */}
-                <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-green-300 dark:hover:border-green-700 transition-all group">
-                  <div className="relative flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={isWhitelisted}
-                      onChange={(e) => setIsWhitelisted(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-green-600 peer-checked:border-green-600 transition-all duration-200 flex items-center justify-center">
-                      <svg className={`w-3 h-3 text-white transition-all duration-200 ${isWhitelisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  </div>
-                  <span className={`text-sm font-medium transition-colors ${isWhitelisted ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400'}`}>
-                    Whitelisted
-                  </span>
-                </label>
-              </div>
-
-              {/* Clear Filters Button - Only show when report is generated */}
-              {reportData && (
-                <button
-                  onClick={() => {
-                    setPlateNumber('');
-                    setStartDate(null);
-                    setEndDate(null);
-                    setSelectedLocations([]);
-                    setSelectedCheckpoints([]);
-                    setIsBlacklisted(false);
-                    setIsWhitelisted(false);
-                    setDatePickerError(null);
-                    setReportData(null);
-                    setError(null);
-                  }}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Clear Filters
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -1145,7 +1411,7 @@ const Reports = () => {
         )}
 
         {/* No Data State - Show when report is generated but has no data */}
-        {!loading && reportData && reportData.summary_data && reportData.summary_data.length === 0 && (
+        {!loading && reportData && reportData.summary_data && reportData.summary_data.length === 0 && activeTab === 'report' && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 mb-8">
             <div className="flex flex-col items-center justify-center text-center">
               <div className="opacity-40 grayscale">
@@ -1160,7 +1426,7 @@ const Reports = () => {
         )}
 
         {/* Report Results Table */}
-        {!loading && canViewTable && reportData && reportData.summary_data && reportData.summary_data.length > 0 && (
+        {activeSection === 'report' && !loading && canViewTable && reportData && reportData.summary_data && reportData.summary_data.length > 0 && (
           <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 mb-8">
             {/* Pagination Loading Overlay */}
             {paginationLoading && (
@@ -1208,20 +1474,20 @@ const Reports = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                       </svg>
                       <p className="text-sm font-semibold text-green-900 dark:text-green-100">
-                        {exportProgress < 30 ? 'Preparing Excel file...' : 
-                         exportProgress < 90 ? 'Downloading...' : 
-                         exportProgress < 100 ? 'Finalizing...' : 
-                         'Complete!'}
+                        {exportProgress < 30 ? 'Preparing Excel file...' :
+                          exportProgress < 90 ? 'Downloading...' :
+                            exportProgress < 100 ? 'Finalizing...' :
+                              'Complete!'}
                       </p>
                     </div>
                     <span className="text-sm font-bold text-green-700 dark:text-green-300">
                       {exportProgress}%
                     </span>
                   </div>
-                  
+
                   {/* Progress Bar */}
                   <div className="relative w-full h-2.5 bg-green-100 dark:bg-green-900/30 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 transition-all duration-300 ease-out rounded-full"
                       style={{ width: `${exportProgress}%` }}
                     >
@@ -1229,7 +1495,7 @@ const Reports = () => {
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                     </div>
                   </div>
-                  
+
                   <p className="text-xs text-green-700 dark:text-green-400 mt-2">
                     Please wait while we generate your Excel report...
                   </p>
@@ -1289,8 +1555,8 @@ const Reports = () => {
                           </div>
                         </td>
                         <td className="py-5 px-6">
-                          <CopyButton 
-                            text={log.plate_number} 
+                          <CopyButton
+                            text={log.plate_number}
                             className="text-sm font-bold text-gray-900 dark:text-white"
                           />
                         </td>
@@ -1328,8 +1594,8 @@ const Reports = () => {
                     }`}>
                     {/* Header with Plate Number */}
                     <div className="flex items-center justify-between mb-2">
-                      <CopyButton 
-                        text={log.plate_number} 
+                      <CopyButton
+                        text={log.plate_number}
                         className="text-sm font-bold text-gray-900 dark:text-white"
                       />
                     </div>
