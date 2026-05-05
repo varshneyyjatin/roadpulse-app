@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAccessControl } from '../../contexts/AccessControl';
 import PageHeader from '../common/PageHeader';
 import VehicleDetailsModal from './VehicleDetailsModal';
@@ -7,276 +7,408 @@ import { handleApiError } from '../../utils/apiErrorHandler';
 import { fetchWithAuth } from '../../utils/fetchWrapper';
 import CopyButton from '../common/CopyButton';
 
-// Custom Date Picker Component
-const CustomDatePicker = ({ label, value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const dropdownRef = useRef(null);
-  const buttonRef = useRef(null);
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const pad = (n) => String(n).padStart(2, '0');
+
+/** 'YYYY-MM-DD' from a Date object, local timezone */
+const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** 'HH:MM' from hours + minutes */
+const toTimeStr = (h, m) => `${pad(h)}:${pad(m)}`;
+
+/** Build ISO-like string that the backend schema accepts */
+const buildDateTime = (dateStr, timeStr) => {
+  if (!dateStr) return null;
+  if (!timeStr) return dateStr;                // plain date
+  return `${dateStr}T${timeStr}:00`;           // full datetime
+};
+
+const FORMAT_DATE = (str) => {
+  if (!str) return '';
+  const [y, m, d] = str.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d} ${months[Number(m) - 1]} ${y}`;
+};
+
+// ─── TimePicker ─────────────────────────────────────────────────────────────
+
+const TimePicker = ({ value, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const [h, m] = value ? value.split(':').map(Number) : [0, 0];
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && buttonRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        !buttonRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Select date';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const display = value ? value : '--:--';
+
+  const hours   = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  const hourRef   = useRef(null);
+  const minuteRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => {
+        hourRef.current?.children[h]?.scrollIntoView({ block: 'center' });
+        const mIdx = minutes.indexOf(Math.round(m / 5) * 5);
+        minuteRef.current?.children[mIdx >= 0 ? mIdx : 0]?.scrollIntoView({ block: 'center' });
+      }, 50);
+    }
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(!open)}
+        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-mono font-medium transition-all
+          ${disabled
+            ? 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+            : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-800 dark:text-gray-200 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer'
+          } ${open ? 'border-blue-500 ring-2 ring-blue-500/20' : ''}`}
+      >
+        <svg className={`w-3.5 h-3.5 ${disabled ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className={disabled ? 'text-gray-300 dark:text-gray-600' : value ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}>
+          {display}
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute z-[200] top-full mt-1.5 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden w-36">
+          <div className="flex">
+            {/* Hours */}
+            <div className="flex-1 border-r border-gray-100 dark:border-slate-700">
+              <div className="px-2 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-center">HH</div>
+              <div ref={hourRef} className="h-40 overflow-y-auto scrollbar-hide">
+                {hours.map((hour) => (
+                  <button
+                    key={hour}
+                    type="button"
+                    onClick={() => { onChange(toTimeStr(hour, m)); }}
+                    className={`w-full px-2 py-1.5 text-sm font-mono text-center transition-colors
+                      ${h === hour
+                        ? 'bg-blue-500 text-white font-semibold'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    {pad(hour)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Minutes */}
+            <div className="flex-1">
+              <div className="px-2 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-center">MM</div>
+              <div ref={minuteRef} className="h-40 overflow-y-auto scrollbar-hide">
+                {minutes.map((min) => (
+                  <button
+                    key={min}
+                    type="button"
+                    onClick={() => { onChange(toTimeStr(h, min)); setOpen(false); }}
+                    className={`w-full px-2 py-1.5 text-sm font-mono text-center transition-colors
+                      ${m === min
+                        ? 'bg-blue-500 text-white font-semibold'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    {pad(min)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="px-3 py-2 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false); }}
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── DateRangePicker (with time) ─────────────────────────────────────────────
+
+const DateRangeTimePicker = ({ startDate, endDate, startTime, endTime, onStartDate, onEndDate, onStartTime, onEndTime, onClear }) => {
+  const [open, setOpen]         = useState(false);
+  const [hoverDate, setHover]   = useState(null);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = startDate ? new Date(startDate) : new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const [error, setError]       = useState('');
+  const ref   = useRef(null);
+  const btnRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target) &&
+          btnRef.current && !btnRef.current.contains(e.target)) {
+        setOpen(false);
+        setError('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const isSameDay = startDate && endDate && startDate === endDate;
+  const timeEnabled = isSameDay;
+
+  // Display label
+  const label = useMemo(() => {
+    if (!startDate && !endDate) return null;
+    const s = FORMAT_DATE(startDate);
+    const e = FORMAT_DATE(endDate);
+    const st = startTime ? ` ${startTime}` : '';
+    const et = endTime   ? ` ${endTime}`   : '';
+    if (startDate && endDate) {
+      if (isSameDay) return `${s}${st} → ${et || '23:59'}`;
+      return `${s} → ${e}`;
+    }
+    return s ? `From ${s}` : '';
+  }, [startDate, endDate, startTime, endTime, isSameDay]);
+
+  const handleDayClick = (dateStr) => {
+    setError('');
+    if (!startDate || (startDate && endDate)) {
+      onStartDate(dateStr);
+      onEndDate(null);
+      onStartTime('');
+      onEndTime('');
+    } else {
+      if (dateStr < startDate) {
+        onEndDate(startDate);
+        onStartDate(dateStr);
+      } else {
+        const diffDays = (new Date(dateStr) - new Date(startDate)) / 86400000;
+        if (diffDays >= 90) {
+          setError('Range cannot exceed 90 days');
+          return;
+        }
+        onEndDate(dateStr);
+      }
+    }
   };
 
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
-    return { daysInMonth, startingDayOfWeek, year, month };
-  };
-
-  const handleDateSelect = (day) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    // Use local date formatting to avoid timezone issues
-    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    onChange(formattedDate);
-    setIsOpen(false);
-  };
-
-  const changeMonth = (direction) => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + direction);
-      return newDate;
+  const changeMonth = (dir) => {
+    setViewMonth(prev => {
+      let m = prev.month + dir;
+      let y = prev.year;
+      if (m > 11) { m = 0; y++; }
+      if (m < 0)  { m = 11; y--; }
+      return { year: y, month: m };
     });
   };
 
-  const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const { year, month } = viewMonth;
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const firstDow  = new Date(year, month, 1).getDay();
+  const daysInMo  = new Date(year, month + 1, 0).getDate();
+  const todayStr  = toDateStr(new Date());
 
-  const isSelectedDate = (day) => {
-    if (!value) return false;
-    // Parse the date string directly to avoid timezone issues
-    const [selectedYear, selectedMonth, selectedDay] = value.split('-').map(Number);
-    return selectedDay === day &&
-      (selectedMonth - 1) === month &&
-      selectedYear === year;
+  const getDayState = (dateStr) => {
+    const isStart = dateStr === startDate;
+    const isEnd   = dateStr === endDate;
+    const inRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
+    const isHover = hoverDate && startDate && !endDate && dateStr > startDate && dateStr <= hoverDate;
+    const isFuture = dateStr > todayStr;
+    const isToday = dateStr === todayStr;
+    return { isStart, isEnd, inRange, isHover, isFuture, isToday };
   };
 
   return (
     <div className="relative">
-      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-        {label}
-      </label>
+      {/* Trigger button */}
       <button
-        ref={buttonRef}
+        ref={btnRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm transition-all w-full
+          bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600
+          hover:border-gray-400 dark:hover:border-slate-500
+          ${open ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20' : ''}
+        `}
       >
-        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <span className={`text-sm flex-1 text-left ${value ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-          {formatDate(value)}
+        <span className={`flex-1 text-left truncate ${label ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400'}`}>
+          {label || 'Select date range'}
         </span>
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {(startDate || endDate) && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onClear(); setError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), onClear())}
+            className="w-4 h-4 flex items-center justify-center rounded-full bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors flex-shrink-0"
+          >
+            <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </span>
+        )}
+        <svg className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {isOpen && (
-        <div ref={dropdownRef} className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 p-4">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              type="button"
-              onClick={() => changeMonth(-1)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Dropdown */}
+      {open && (
+        <div
+          ref={ref}
+          className="absolute z-[200] top-full mt-2 left-0 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden"
+          style={{ minWidth: 340 }}
+        >
+          {/* Month nav */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <button type="button" onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              {monthNames[month]} {year}
-            </div>
-            <button
-              type="button"
-              onClick={() => changeMonth(1)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="text-sm font-semibold text-gray-800 dark:text-white">{MONTH_NAMES[month]} {year}</span>
+            <button type="button" onClick={() => changeMonth(1)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
 
-          {/* Day Names */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {dayNames.map(day => (
-              <div key={day} className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 py-2">
-                {day}
-              </div>
+          {/* Day headers */}
+          <div className="grid grid-cols-7 px-3 pb-1">
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+              <div key={d} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500 py-1 uppercase tracking-wider">{d}</div>
             ))}
           </div>
 
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {/* Empty cells for days before month starts */}
-            {Array.from({ length: startingDayOfWeek }).map((_, index) => (
-              <div key={`empty-${index}`} className="aspect-square"></div>
-            ))}
-
-            {/* Actual days */}
-            {Array.from({ length: daysInMonth }).map((_, index) => {
-              const day = index + 1;
-              const isSelected = isSelectedDate(day);
+          {/* Days */}
+          <div className="grid grid-cols-7 px-3 pb-3 gap-y-0.5">
+            {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
+            {Array.from({ length: daysInMo }).map((_, i) => {
+              const day     = i + 1;
+              const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`;
+              const { isStart, isEnd, inRange, isHover, isFuture, isToday } = getDayState(dateStr);
+              const isSelected = isStart || isEnd;
 
               return (
                 <button
                   key={day}
                   type="button"
-                  onClick={() => handleDateSelect(day)}
-                  className={`aspect-square flex items-center justify-center text-sm rounded-lg transition-colors ${isSelected
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
-                    }`}
+                  disabled={isFuture}
+                  onClick={() => !isFuture && handleDayClick(dateStr)}
+                  onMouseEnter={() => !isFuture && setHover(dateStr)}
+                  onMouseLeave={() => setHover(null)}
+                  className={`relative h-8 w-full flex items-center justify-center text-sm rounded-lg transition-all select-none
+                    ${isFuture ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'cursor-pointer'}
+                    ${isSelected ? 'bg-blue-600 text-white font-semibold z-10' : ''}
+                    ${(inRange || isHover) && !isSelected ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-none' : ''}
+                    ${isStart && endDate ? 'rounded-l-lg rounded-r-none' : ''}
+                    ${isEnd && startDate !== endDate ? 'rounded-r-lg rounded-l-none' : ''}
+                    ${!isSelected && !inRange && !isHover && !isFuture ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300' : ''}
+                    ${isToday && !isSelected ? 'ring-2 ring-inset ring-blue-400 dark:ring-blue-500' : ''}
+                  `}
                 >
                   {day}
                 </button>
               );
             })}
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
-// Custom Dropdown Component - Same as Dashboard
-const CustomDropdown = ({ label, value, onChange, options, placeholder, icon, showSearch = true }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [dropdownSearchQuery, setDropdownSearchQuery] = useState('');
-  const dropdownRef = useRef(null);
-  const buttonRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && buttonRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        !buttonRef.current.contains(event.target)) {
-        setIsOpen(false);
-        setDropdownSearchQuery('');
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const selectedOption = options.find(opt => opt.value === value);
-
-  const filteredOptions = options.filter(opt =>
-    opt.label.toLowerCase().includes(dropdownSearchQuery.toLowerCase())
-  );
-
-  return (
-    <div className="relative">
-      {label && (
-        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-          {label}
-        </label>
-      )}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
-      >
-        {icon && (
-          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {icon}
-          </svg>
-        )}
-        <span className={`text-sm flex-1 text-left ${value ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-          {selectedOption?.label || placeholder}
-        </span>
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div ref={dropdownRef} className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700">
-          {/* Search Box */}
-          {showSearch && options.length > 1 && (
-            <div className="p-3 border-b border-gray-200 dark:border-slate-700">
-              <div className="relative">
-                <svg className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={dropdownSearchQuery}
-                  onChange={(e) => setDropdownSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400"
-                />
-              </div>
+          {/* Error */}
+          {error && (
+            <div className="mx-3 mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
             </div>
           )}
 
-          {/* Options List */}
-          <div className="p-2 max-h-80 overflow-y-auto">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                    setDropdownSearchQuery('');
-                  }}
-                  className="relative w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  {value === option.value && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 dark:bg-blue-400 rounded-r-full"></div>
-                  )}
-
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${value === option.value
-                      ? 'bg-blue-600 dark:bg-blue-400'
-                      : 'bg-gray-300 dark:bg-slate-600'
-                      }`}></div>
-
-                    <span className={`text-sm flex-1 ${value === option.value ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
-                      {option.label}
-                    </span>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="px-4 py-8 text-center">
-                <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          {/* ── Time filter section (only when same day selected) ── */}
+          <div className={`border-t border-gray-100 dark:border-slate-700 transition-all ${timeEnabled ? 'opacity-100' : 'opacity-40'}`}>
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No results found</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Try a different search term</p>
+                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Time Filter</span>
+                {!timeEnabled && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">Select same start & end date</span>
+                )}
               </div>
-            )}
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-wider">From</div>
+                  <TimePicker value={startTime} onChange={onStartTime} disabled={!timeEnabled} />
+                </div>
+                <div className="mt-4 text-gray-300 dark:text-gray-600">→</div>
+                <div className="flex-1">
+                  <div className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-wider">To</div>
+                  <TimePicker value={endTime} onChange={onEndTime} disabled={!timeEnabled} />
+                </div>
+              </div>
+
+              {timeEnabled && (startTime || endTime) && (
+                <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                    Filtering {FORMAT_DATE(startDate)} {startTime || '00:00'} – {endTime || '23:59'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40">
+            <button
+              type="button"
+              onClick={() => { onClear(); setError(''); }}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
+            >
+              Clear all
+            </button>
+            <button
+              type="button"
+              disabled={!startDate}
+              onClick={() => {
+                if (!endDate) {
+                  setError('Please select an end date');
+                  return;
+                }
+                setError('');
+                setOpen(false);
+              }}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              Apply
+            </button>
           </div>
         </div>
       )}
@@ -284,1027 +416,776 @@ const CustomDropdown = ({ label, value, onChange, options, placeholder, icon, sh
   );
 };
 
+// ─── MultiSelectDropdown ─────────────────────────────────────────────────────
+
+const MultiSelectDropdown = ({ label, value = [], onChange, options, placeholder, icon }) => {
+  const [open, setOpen]   = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(''); } };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const allSelected = value.length === options.length && options.length > 0;
+
+  const toggle = (id) => {
+    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id]);
+  };
+
+  const displayLabel = value.length === 0
+    ? placeholder
+    : value.length === 1
+      ? options.find(o => o.value === value[0])?.label
+      : `${value.length} selected`;
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">{label}</label>}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm transition-all
+          bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600
+          hover:border-gray-400 dark:hover:border-slate-500
+          ${open ? 'border-blue-500 ring-2 ring-blue-500/20' : ''}
+        `}
+      >
+        {icon && <span className="text-gray-400 flex-shrink-0">{icon}</span>}
+        <span className={`flex-1 text-left truncate ${value.length > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400'}`}>
+          {displayLabel}
+        </span>
+        {value.length > 0 && (
+          <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-xs font-semibold px-1.5 py-0.5 rounded-md flex-shrink-0">
+            {value.length}
+          </span>
+        )}
+        <svg className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-[100] top-full mt-1.5 left-0 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          {options.length > 4 && (
+            <div className="p-2 border-b border-gray-100 dark:border-slate-700">
+              <div className="relative">
+                <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+          )}
+          {options.length > 1 && (
+            <button
+              type="button"
+              onClick={() => onChange(allSelected ? [] : options.map(o => o.value))}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700"
+            >
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${allSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-slate-500'}`}>
+                {allSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+              </div>
+              <span className="font-medium text-gray-700 dark:text-gray-300">Select All</span>
+            </button>
+          )}
+          <div className="max-h-52 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-gray-400">No results</div>
+            ) : filtered.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${value.includes(opt.value) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-slate-500'}`}>
+                  {value.includes(opt.value) && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                </div>
+                <div className="flex-1 text-left">
+                  <span className="text-gray-800 dark:text-gray-200">{opt.label}</span>
+                  {opt.locationName && <span className="text-xs text-gray-400 ml-1.5">({opt.locationName})</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+          {value.length > 0 && (
+            <div className="px-4 py-2 border-t border-gray-100 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── CustomDropdown (entries) ────────────────────────────────────────────────
+
+const CustomDropdown = ({ value, onChange, options, showSearch = false }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all
+          bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600
+          ${open ? 'border-blue-500 ring-2 ring-blue-500/20' : 'hover:border-gray-400'}`}
+      >
+        <span className="text-gray-800 dark:text-gray-200 font-medium">{selected?.label}</span>
+        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 bottom-full mb-1 right-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden py-1 min-w-max">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full px-4 py-2 text-sm text-left transition-colors
+                ${value === opt.value
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── ActiveFilterPill ────────────────────────────────────────────────────────
+
+const FilterPill = ({ label, onRemove }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-medium rounded-full">
+    {label}
+    <button type="button" onClick={onRemove} className="hover:text-blue-900 dark:hover:text-blue-300 transition-colors">
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </span>
+);
+
+// ─── Reports Page ─────────────────────────────────────────────────────────────
+
 const Reports = () => {
   const { hasPermissionForComponent, accessControl } = useAccessControl();
 
-  // Permission checks - if no components assigned to Reports tab, all permissions are granted
-  const canViewTable = hasPermissionForComponent('Reports', 'comp011', 'can_view');
-  const canExportExcel = hasPermissionForComponent('Reports', 'comp013', 'can_view');
+  const canViewTable    = hasPermissionForComponent('Reports', 'comp011', 'can_view');
+  const canExportExcel  = hasPermissionForComponent('Reports', 'comp013', 'can_view');
   const canDownloadImage = hasPermissionForComponent('Reports', 'comp012', 'can_view');
 
-  // Debug permissions
-  console.log('Reports Permissions:', { canViewTable, canExportExcel, canDownloadImage });
-
-  // Filter States
-  const [selectedLocations, setSelectedLocations] = useState([]); // Changed to array for multi-select
-  const [selectedCheckpoints, setSelectedCheckpoints] = useState([]); // Changed to array for multi-select
-  const [plateNumber, setPlateNumber] = useState('');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [datePickerError, setDatePickerError] = useState(null);
+  // Filter state
+  const [selectedLocations,  setSelectedLocations]  = useState([]);
+  const [selectedCheckpoints, setSelectedCheckpoints] = useState([]);
+  const [plateNumber,  setPlateNumber]  = useState('');
+  const [startDate,    setStartDate]    = useState(null);
+  const [endDate,      setEndDate]      = useState(null);
+  const [startTime,    setStartTime]    = useState('');
+  const [endTime,      setEndTime]      = useState('');
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [isWhitelisted, setIsWhitelisted] = useState(false);
-  
-  // Dropdown states for multi-select
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const [showCheckpointDropdown, setShowCheckpointDropdown] = useState(false);
-  const locationDropdownRef = useRef(null);
-  const checkpointDropdownRef = useRef(null);
-  
-  const datePickerRef = useRef(null);
-  const dateButtonRef = useRef(null);
 
-  // Report Data States
-  const [reportData, setReportData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // Data state
+  const [reportData, setReportData]   = useState(null);
+  const [loading,    setLoading]      = useState(false);
+  const [error,      setError]        = useState(null);
 
-  // Search and Pagination States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  // Pagination
+  const [currentPage,  setCurrentPage]  = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
-  const [paginationLoading, setPaginationLoading] = useState(false);
+  const [pageLoading,  setPageLoading]  = useState(false);
 
-  // Vehicle Details Modal States
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Modal
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [selectedVehicle,  setSelectedVehicle]  = useState(null);
 
-  // Export Loading States
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
+  // Excel export
+  const [exportingExcel,  setExportingExcel]  = useState(false);
+  const [exportProgress, setExportProgress]  = useState(0);
 
-  // Get locations from AccessControl
+  // ── Derived options ──────────────────────────────────────────────────────
+
   const locationOptions = (accessControl?.locations || []).map(loc => ({
     value: loc.location_id,
-    label: loc.location_name
+    label: loc.location_name,
   }));
 
-  // Get checkpoints based on selected locations
   const checkpointOptions = useMemo(() => {
-    if (selectedLocations.length === 0) {
-      // If no location selected, show all checkpoints from all locations
-      return (accessControl?.locations || []).flatMap(loc =>
-        (loc.checkpoints || []).map(cp => ({
-          value: cp.checkpoint_id,
-          label: cp.checkpoint_name,
-          locationName: loc.location_name
-        }))
-      );
-    } else {
-      // If locations selected, show only those locations' checkpoints
-      return (accessControl?.locations || [])
-        .filter(loc => selectedLocations.includes(loc.location_id))
-        .flatMap(loc =>
-          (loc.checkpoints || []).map(cp => ({
-            value: cp.checkpoint_id,
-            label: cp.checkpoint_name,
-            locationName: loc.location_name
-          }))
-        );
-    }
+    const locs = accessControl?.locations || [];
+    const source = selectedLocations.length === 0
+      ? locs
+      : locs.filter(l => selectedLocations.includes(l.location_id));
+    return source.flatMap(loc =>
+      (loc.checkpoints || []).map(cp => ({
+        value: cp.checkpoint_id,
+        label: cp.checkpoint_name,
+        locationName: loc.location_name,
+      }))
+    );
   }, [selectedLocations, accessControl]);
 
-  // Click outside handler for dropdowns
+  // Keep checkpoint selection valid when locations change
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showDatePicker && datePickerRef.current && dateButtonRef.current &&
-        !datePickerRef.current.contains(event.target) &&
-        !dateButtonRef.current.contains(event.target)) {
-        setShowDatePicker(false);
-      }
-      if (showLocationDropdown && locationDropdownRef.current &&
-        !locationDropdownRef.current.contains(event.target)) {
-        setShowLocationDropdown(false);
-      }
-      if (showCheckpointDropdown && checkpointDropdownRef.current &&
-        !checkpointDropdownRef.current.contains(event.target)) {
-        setShowCheckpointDropdown(false);
-      }
+    const valid = selectedCheckpoints.filter(id => checkpointOptions.some(cp => cp.value === id));
+    if (valid.length !== selectedCheckpoints.length) setSelectedCheckpoints(valid);
+  }, [checkpointOptions]);
+
+  const isSameDay = startDate && endDate && startDate === endDate;
+
+  const handleClearDates = () => {
+    setStartDate(null); setEndDate(null);
+    setStartTime(''); setEndTime('');
+  };
+
+  // ── Build request body ───────────────────────────────────────────────────
+
+  const buildRequestBody = useCallback((overrides = {}) => {
+    const body = {
+      scope: 'report',
+      location_ids:   selectedLocations.length  > 0 ? selectedLocations  : null,
+      checkpoint_ids: selectedCheckpoints.length > 0 ? selectedCheckpoints : null,
+      plate_number:   plateNumber.trim() || null,
+      start_date: buildDateTime(startDate, isSameDay ? startTime : null),
+      end_date:   buildDateTime(endDate,   isSameDay ? endTime   : null),
+      page:       currentPage,
+      page_size:  itemsPerPage,
     };
+    if (isBlacklisted) body.is_blacklisted = true;
+    if (isWhitelisted) body.is_whitelisted = true;
+    return { ...body, ...overrides };
+  }, [selectedLocations, selectedCheckpoints, plateNumber, startDate, endDate, startTime, endTime, isSameDay, currentPage, itemsPerPage, isBlacklisted, isWhitelisted]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDatePicker, showLocationDropdown, showCheckpointDropdown]);
+  // ── Validation ───────────────────────────────────────────────────────────
 
-  // Reset checkpoints when locations change
-  useEffect(() => {
-    if (selectedLocations.length > 0) {
-      // Remove checkpoints that don't belong to selected locations
-      const validCheckpoints = selectedCheckpoints.filter(cpId =>
-        checkpointOptions.some(cp => cp.value === cpId)
-      );
-      if (validCheckpoints.length !== selectedCheckpoints.length) {
-        setSelectedCheckpoints(validCheckpoints);
-      }
+  const validate = () => {
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      setError({ title: 'Validation Error', message: 'Please select both start and end dates.' });
+      return false;
     }
-  }, [selectedLocations, checkpointOptions, selectedCheckpoints]);
-
-  const getFilterDisplayText = () => {
-    if (!startDate && !endDate) {
-      return 'Select Date Range';
-    }
-
     if (startDate && endDate) {
-      const startFormatted = new Date(startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      const endFormatted = new Date(endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `${startFormatted} - ${endFormatted}`;
-    } else if (startDate) {
-      const startFormatted = new Date(startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `From ${startFormatted}`;
+      const s = new Date(startDate), e = new Date(endDate);
+      const today = new Date(); today.setHours(23,59,59,999);
+      if (s > e)      { setError({ title: 'Validation Error', message: 'Start date must be before end date.' }); return false; }
+      if (e > today)  { setError({ title: 'Validation Error', message: 'End date cannot be in the future.' }); return false; }
+      if ((e - s) / 86400000 >= 90) { setError({ title: 'Validation Error', message: 'Date range cannot exceed 90 days.' }); return false; }
     }
+    return true;
+  };
 
-    return 'Select Date Range';
+  // ── API calls ────────────────────────────────────────────────────────────
+
+  const fetchReport = async (body) => {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_API_BASE_URL}/dashboard/vehicle-logs`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+    if (!response.ok) { const e = new Error('API Error'); e.response = { status: response.status }; throw e; }
+    return response.json();
   };
 
   const handleGenerateReport = async () => {
-    console.log('Generate Report clicked', { selectedLocations, selectedCheckpoints, plateNumber, startDate, endDate, isBlacklisted, isWhitelisted });
-    
-    // Validations - both dates required if any date is selected
-    if ((startDate && !endDate) || (!startDate && endDate)) {
-      setError({ title: 'Validation Error', message: 'Please select both start and end dates' });
-      return;
-    }
-
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-
-      // Check if end date is before start date
-      if (start > end) {
-        setError({ title: 'Validation Error', message: 'Start date must be before or equal to end date' });
-        return;
-      }
-
-      // Check if end date is in future
-      if (end > today) {
-        setError({ title: 'Validation Error', message: 'End date cannot be in the future' });
-        return;
-      }
-
-      // Check if date range exceeds 90 days
-      const diffTime = end - start;
-      const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      if (diffDays >= 90) {
-        setError({ title: 'Validation Error', message: 'Date range cannot exceed 90 days' });
-        return;
-      }
-    }
-
+    if (!validate()) return;
+    setLoading(true); setError(null); setCurrentPage(1);
     try {
-      setLoading(true);
-      setError(null);
-
-      // Prepare request body
-      const requestBody = {
-        scope: 'report',
-        location_ids: selectedLocations.length > 0 ? selectedLocations : null,
-        checkpoint_ids: selectedCheckpoints.length > 0 ? selectedCheckpoints : null,
-        plate_number: plateNumber.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        page: currentPage,
-        page_size: itemsPerPage
-      };
-      
-      // Only add blacklist/whitelist if checked
-      if (isBlacklisted) {
-        requestBody.is_blacklisted = true;
-      }
-      if (isWhitelisted) {
-        requestBody.is_whitelisted = true;
-      }
-
-      console.log('API Request Body:', JSON.stringify(requestBody, null, 2));
-
-      const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/vehicle-logs`, {
-        method: 'POST',
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const error = new Error('API Error');
-        error.response = { status: response.status };
-        throw error;
-      }
-
-      const data = await response.json();
-      console.log('Report data received:', data);
-      console.log('Summary data length:', data?.summary_data?.length);
-      console.log('Can view table:', canViewTable);
+      const data = await fetchReport(buildRequestBody({ page: 1 }));
       setReportData(data);
-      setError(null);
     } catch (err) {
-      console.error('Error generating report:', err);
-      const errorInfo = handleApiError(err);
-      setError(errorInfo.error);
+      setError(handleApiError(err).error);
       setReportData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter and search logic
-  const filteredLogs = useMemo(() => {
-    if (!reportData?.summary_data) return [];
-
-    return reportData.summary_data.filter(log => {
-      const matchesSearch = log.plate_number?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [reportData, searchQuery]);
-
-  // Use API pagination data
-  const pagination = reportData?.pagination || {};
-  const totalPages = pagination.total_pages || 1;
-  const currentLogs = filteredLogs; // Data already paginated from API
-
-  // Image helper functions
-  const getPlateImage = (log) => {
-    // Direct URL from API response - check both possible field names
-    const plateImageUrl = log.latest_data_number_plate_image || log.number_plate_image;
-    
-    if (plateImageUrl) {
-      console.log('🖼️ Plate Image URL:', plateImageUrl);
-      return plateImageUrl;
-    }
-    console.log('⚠️ No plate image URL found, using placeholder');
-    return '/placeholder-plate.svg';
-  };
-
-  const getVehicleImage = (log) => {
-    // Direct URL from API response - check both possible field names
-    const vehicleImageUrl = log.latest_data_vehicle_image || log.vehicle_image;
-    
-    if (vehicleImageUrl) {
-      console.log('🚗 Vehicle Image URL:', vehicleImageUrl);
-      return vehicleImageUrl;
-    }
-    console.log('⚠️ No vehicle image URL found, using placeholder');
-    return '/placeholder-vehicle.svg';
-  };
-
-  const openDetailsModal = (vehicle) => {
-    setSelectedVehicle(vehicle);
-    setDetailsModalOpen(true);
-  };
-
-  const closeDetailsModal = () => {
-    setDetailsModalOpen(false);
-    setSelectedVehicle(null);
-  };
-
-  // Reset to page 1 when search changes
+  // Re-fetch on page / page-size change (not on first load)
+  const isFirstRender = useRef(true);
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, itemsPerPage]);
-
-  const handlePageChange = (page) => {
-    setPaginationLoading(true);
-    setCurrentPage(page);
-    // Show loader for minimum 400ms to give user feedback
-    setTimeout(() => setPaginationLoading(false), 400);
-  };
-
-  const handlePageSizeChange = (newSize) => {
-    setPaginationLoading(true);
-    setItemsPerPage(newSize);
-    setCurrentPage(1); // Reset to first page
-    // Show loader for minimum 400ms to give user feedback
-    setTimeout(() => setPaginationLoading(false), 400);
-  };
-
-  const handleGoToFirstPage = () => {
-    if (currentPage !== 1) {
-      handlePageChange(1);
-    }
-  };
-
-  const entriesOptions = [
-    { value: 50, label: '50 entries' },
-    { value: 75, label: '75 entries' },
-    { value: 100, label: '100 entries' }
-  ];
-
-  // Trigger API call when page or page size changes
-  useEffect(() => {
-    if (reportData && (currentPage !== pagination.page || itemsPerPage !== pagination.page_size)) {
-      handleGenerateReport();
-    }
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    if (!reportData) return;
+    (async () => {
+      setPageLoading(true);
+      try {
+        const data = await fetchReport(buildRequestBody());
+        setReportData(data);
+      } catch {}
+      finally { setPageLoading(false); }
+    })();
   }, [currentPage, itemsPerPage]);
 
-  // Handle Excel Export via API with Smooth Progress
+  // ── Excel export ─────────────────────────────────────────────────────────
+
   const handleExcelExport = async () => {
+    setExportingExcel(true); setExportProgress(0);
+    const interval = setInterval(() => {
+      setExportProgress(p => p < 85 ? p + (p < 20 ? 2 : p < 50 ? 1.5 : 0.7) : p);
+    }, 120);
     try {
-      setExportingExcel(true);
-      setExportProgress(0);
-
-      // Prepare request body - same as report generation but with excel_report flag
-      const requestBody = {
-        scope: 'report',
-        location_ids: selectedLocations.length > 0 ? selectedLocations : null,
-        checkpoint_ids: selectedCheckpoints.length > 0 ? selectedCheckpoints : null,
-        plate_number: plateNumber.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        excel_report: true  // This triggers Excel download from API
-      };
-      
-      // Only add blacklist/whitelist if checked
-      if (isBlacklisted) {
-        requestBody.is_blacklisted = true;
-      }
-      if (isWhitelisted) {
-        requestBody.is_whitelisted = true;
-      }
-
-      console.log('Excel Export Request:', JSON.stringify(requestBody, null, 2));
-
-      // Smooth progress simulation
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => {
-          if (prev < 20) return prev + 2;
-          if (prev < 40) return prev + 1.5;
-          if (prev < 70) return prev + 1;
-          if (prev < 85) return prev + 0.5;
-          return prev;
-        });
-      }, 100);
-
-      const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/vehicle-logs`, {
-        method: 'POST',
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        clearInterval(progressInterval);
-        throw new Error('Failed to export Excel');
-      }
-
-      // Jump to 85% when response received
-      setExportProgress(85);
-
-      // Get the blob from response
+      const response = await fetchWithAuth(
+        `${import.meta.env.VITE_API_BASE_URL}/dashboard/vehicle-logs`,
+        { method: 'POST', body: JSON.stringify(buildRequestBody({ excel_report: true })) }
+      );
+      if (!response.ok) throw new Error('Export failed');
+      clearInterval(interval); setExportProgress(95);
       const blob = await response.blob();
-      
-      // Clear interval and set to 95%
-      clearInterval(progressInterval);
-      setExportProgress(95);
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().split('T')[0];
-      link.download = `vehicle-report-${timestamp}.xlsx`;
-      
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = `vehicle-report-${startDate || 'all'}.xlsx`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
       setExportProgress(100);
-      console.log('Excel export completed successfully');
-      
-      // Keep progress at 100% for a moment before hiding
-      setTimeout(() => {
-        setExportingExcel(false);
-        setExportProgress(0);
-      }, 800);
+      setTimeout(() => { setExportingExcel(false); setExportProgress(0); }, 800);
     } catch (err) {
-      console.error('Error exporting Excel:', err);
-      const errorInfo = handleApiError(err);
-      setError(errorInfo.error);
-      setExportingExcel(false);
-      setExportProgress(0);
+      clearInterval(interval);
+      setError(handleApiError(err).error);
+      setExportingExcel(false); setExportProgress(0);
     }
   };
+
+  // ── Filtered logs ────────────────────────────────────────────────────────
+
+  const filteredLogs = useMemo(() => {
+    if (!reportData?.summary_data) return [];
+    if (!searchQuery) return reportData.summary_data;
+    return reportData.summary_data.filter(l =>
+      l.plate_number?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [reportData, searchQuery]);
+
+  const pagination  = reportData?.pagination || {};
+  const totalPages  = pagination.total_pages || 1;
+
+  // ── Image helpers ────────────────────────────────────────────────────────
+
+  const getPlateImage   = (log) => log.latest_data_number_plate_image || log.number_plate_image || '/placeholder-plate.svg';
+  const getVehicleImage = (log) => log.latest_data_vehicle_image || log.vehicle_image || '/placeholder-vehicle.svg';
+
+  const openModal  = (v) => { setSelectedVehicle(v); setDetailsModalOpen(true); };
+  const closeModal = ()  => { setDetailsModalOpen(false); setSelectedVehicle(null); };
+
+  // ── Active filter pills ──────────────────────────────────────────────────
+
+  const activeFilters = useMemo(() => {
+    const pills = [];
+    if (plateNumber.trim()) pills.push({ key: 'plate', label: `Plate: ${plateNumber.toUpperCase()}`, onRemove: () => setPlateNumber('') });
+    if (startDate) pills.push({ key: 'date', label: isSameDay ? `${FORMAT_DATE(startDate)} ${startTime || '00:00'}–${endTime || '23:59'}` : `${FORMAT_DATE(startDate)} → ${FORMAT_DATE(endDate)}`, onRemove: handleClearDates });
+    if (selectedLocations.length) pills.push({ key: 'loc', label: `${selectedLocations.length} Location${selectedLocations.length > 1 ? 's' : ''}`, onRemove: () => setSelectedLocations([]) });
+    if (selectedCheckpoints.length) pills.push({ key: 'cp', label: `${selectedCheckpoints.length} Checkpoint${selectedCheckpoints.length > 1 ? 's' : ''}`, onRemove: () => setSelectedCheckpoints([]) });
+    if (isBlacklisted) pills.push({ key: 'bl', label: 'Blacklisted', onRemove: () => setIsBlacklisted(false) });
+    if (isWhitelisted) pills.push({ key: 'wl', label: 'Whitelisted', onRemove: () => setIsWhitelisted(false) });
+    return pills;
+  }, [plateNumber, startDate, endDate, startTime, endTime, selectedLocations, selectedCheckpoints, isBlacklisted, isWhitelisted, isSameDay]);
+
+  const handleClearAll = () => {
+    setPlateNumber(''); handleClearDates();
+    setSelectedLocations([]); setSelectedCheckpoints([]);
+    setIsBlacklisted(false); setIsWhitelisted(false);
+    setReportData(null); setError(null); setSearchQuery('');
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="bg-white dark:bg-transparent min-h-screen transition-colors duration-300">
 
       <PageHeader
         title="Reports & Analytics"
-        description="Generate comprehensive reports and analyze vehicle data with advanced filtering options"
+        description="Generate comprehensive reports and analyze vehicle detection data"
       />
 
-      {/* Main Content Container */}
-      <div className="max-w-7xl mx-auto pb-6 px-6">
+      <div className="max-w-7xl mx-auto pb-8 px-4 sm:px-6">
 
-        {/* Loading State */}
+        {/* ── Loading ── */}
         {loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 mb-8">
-            <div className="flex flex-col items-center justify-center text-center">
-              <Loader />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 mt-6">Generating Report</h3>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                Please wait while we fetch your data...
-              </p>
-            </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm p-16 mb-6 flex flex-col items-center gap-4">
+            <Loader />
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Generating report…</p>
           </div>
         )}
 
-        {/* Filter Section */}
+        {/* ── Filter Panel ── */}
         {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 mb-8">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Filter Reports</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm mb-6 overflow-visible">
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-              {/* Plate Number Input */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Plate Number
-                </label>
-                <input
-                  type="text"
-                  value={plateNumber}
-                  onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. DL3CBR1119"
-                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              {/* Date Range Picker */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Date Range
-                </label>
-                <button
-                  ref={dateButtonRef}
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all cursor-pointer"
-                >
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            {/* Panel header */}
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
-                  <span className={`text-sm flex-1 text-left ${startDate && endDate ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                    {getFilterDisplayText()}
-                  </span>
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {/* Date Range Picker Dropdown */}
-                {showDatePicker && (
-                  <div ref={datePickerRef} className="absolute left-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-4">
-                    {/* Calendar Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <button
-                        onClick={() => {
-                          const newMonth = new Date(currentMonth);
-                          newMonth.setMonth(newMonth.getMonth() - 1);
-                          setCurrentMonth(newMonth);
-                        }}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </div>
-                      <button
-                        onClick={() => {
-                          const newMonth = new Date(currentMonth);
-                          newMonth.setMonth(newMonth.getMonth() + 1);
-                          setCurrentMonth(newMonth);
-                        }}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div className="grid grid-cols-7 gap-1 mb-4">
-                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                        <div key={day} className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 py-2">
-                          {day}
-                        </div>
-                      ))}
-
-                      {(() => {
-                        const year = currentMonth.getFullYear();
-                        const month = currentMonth.getMonth();
-                        const firstDay = new Date(year, month, 1).getDay();
-                        const daysInMonth = new Date(year, month + 1, 0).getDate();
-                        const days = [];
-
-                        const today = new Date();
-                        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-                        for (let i = 0; i < firstDay; i++) {
-                          days.push(<div key={`empty-${i}`} />);
-                        }
-
-                        for (let day = 1; day <= daysInMonth; day++) {
-                          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const isStart = startDate === dateStr;
-                          const isEnd = endDate === dateStr;
-                          const isInRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
-                          const isToday = dateStr === todayStr;
-
-                          days.push(
-                            <button
-                              key={day}
-                              onClick={() => {
-                                setDatePickerError(null);
-                                if (!startDate || (startDate && endDate)) {
-                                  setStartDate(dateStr);
-                                  setEndDate(null);
-                                } else if (dateStr < startDate) {
-                                  setEndDate(startDate);
-                                  setStartDate(dateStr);
-                                } else {
-                                  const start = new Date(startDate);
-                                  const end = new Date(dateStr);
-                                  const diffTime = end - start;
-                                  const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-                                  if (diffDays >= 90) {
-                                    setDatePickerError('You cannot select more than 90 days');
-                                    return;
-                                  }
-
-                                  setEndDate(dateStr);
-                                }
-                              }}
-                              className={`aspect-square flex items-center justify-center text-sm rounded-lg transition-colors relative ${
-                                isStart || isEnd
-                                  ? 'bg-blue-600 text-white font-bold'
-                                  : isInRange
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                                  : isToday
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold ring-2 ring-green-500 dark:ring-green-600'
-                                  : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
-                              }`}
-                            >
-                              {day}
-                            </button>
-                          );
-                        }
-
-                        return days;
-                      })()}
-                    </div>
-
-                    {/* Date Range Error */}
-                    {datePickerError && (
-                      <div className="mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          <p className="text-xs text-red-700 dark:text-red-400 font-medium">
-                            {datePickerError}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-slate-700">
-                      <button
-                        onClick={() => {
-                          setStartDate(null);
-                          setEndDate(null);
-                          setDatePickerError(null);
-                        }}
-                        className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!startDate || !endDate) {
-                            setDatePickerError('Please select both start and end dates');
-                            return;
-                          }
-
-                          const start = new Date(startDate);
-                          const end = new Date(endDate);
-                          const today = new Date();
-                          today.setHours(23, 59, 59, 999);
-
-                          if (start > end) {
-                            setDatePickerError('Start date must be before or equal to end date');
-                            return;
-                          }
-
-                          if (end > today) {
-                            setDatePickerError('End date cannot be in the future');
-                            return;
-                          }
-
-                          const diffTime = end - start;
-                          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-                          if (diffDays >= 90) {
-                            setDatePickerError('Date range cannot exceed 90 days');
-                            return;
-                          }
-
-                          setDatePickerError(null);
-                          setShowDatePicker(false);
-                        }}
-                        disabled={!startDate || !endDate}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Location Filter - Multi-select */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Locations
-                </label>
-                <div ref={locationDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className={`text-sm flex-1 text-left ${selectedLocations.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                      {selectedLocations.length === 0 ? 'All Locations' : `${selectedLocations.length} selected`}
-                    </span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {showLocationDropdown && (
-                    <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
-                      <div className="p-2">
-                        {locationOptions.map((location) => (
-                          <label
-                            key={location.value}
-                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedLocations.includes(location.value)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedLocations([...selectedLocations, location.value]);
-                                } else {
-                                  setSelectedLocations(selectedLocations.filter(id => id !== location.value));
-                                }
-                              }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-900 dark:text-white">{location.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
+                <span className="text-sm font-semibold text-gray-800 dark:text-white">Filters</span>
               </div>
-
-              {/* Checkpoint Filter - Multi-select */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Checkpoints
-                </label>
-                <div ref={checkpointDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCheckpointDropdown(!showCheckpointDropdown)}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span className={`text-sm flex-1 text-left ${selectedCheckpoints.length > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
-                      {selectedCheckpoints.length === 0 ? 'All Checkpoints' : `${selectedCheckpoints.length} selected`}
-                    </span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {showCheckpointDropdown && (
-                    <div className="absolute z-50 left-0 mt-2 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-h-80 overflow-y-auto">
-                      <div className="p-2">
-                        {checkpointOptions.length > 0 ? (
-                          checkpointOptions.map((checkpoint) => (
-                            <label
-                              key={checkpoint.value}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedCheckpoints.includes(checkpoint.value)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedCheckpoints([...selectedCheckpoints, checkpoint.value]);
-                                  } else {
-                                    setSelectedCheckpoints(selectedCheckpoints.filter(id => id !== checkpoint.value));
-                                  }
-                                }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                              />
-                              <div className="flex-1">
-                                <span className="text-sm text-gray-900 dark:text-white">{checkpoint.label}</span>
-                                {checkpoint.locationName && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({checkpoint.locationName})</span>
-                                )}
-                              </div>
-                            </label>
-                          ))
-                        ) : (
-                          <div className="px-4 py-8 text-center">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No checkpoints available</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Generate Button */}
-              <div className="flex items-end">
-                <button
-                  onClick={handleGenerateReport}
-                  className="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Generate
+              {activeFilters.length > 0 && (
+                <button onClick={handleClearAll} className="text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors font-medium">
+                  Clear all
                 </button>
-              </div>
+              )}
             </div>
 
-            {/* Watchlist Filters - Custom Checkbox Design */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-slate-700">
-              <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Show:</span>
-              
-              {/* Blacklist Checkbox */}
-              <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-all group">
-                <div className="relative flex items-center justify-center">
-                  <input
-                    type="checkbox"
-                    checked={isBlacklisted}
-                    onChange={(e) => setIsBlacklisted(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-red-600 peer-checked:border-red-600 transition-all duration-200 flex items-center justify-center">
-                    <svg className={`w-3 h-3 text-white transition-all duration-200 ${isBlacklisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+            {/* Filter grid */}
+            <div className="px-6 pt-5 pb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+
+                {/* Plate Number */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Plate Number</label>
+                  <div className="relative">
+                    <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
+                    <input
+                      type="text"
+                      value={plateNumber}
+                      onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
+                      placeholder="e.g. DL3CBR1119"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
+                    />
                   </div>
                 </div>
-                <span className={`text-sm font-medium transition-colors ${isBlacklisted ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-400'}`}>
-                  Blacklisted
-                </span>
-              </label>
 
-                {/* Whitelist Checkbox */}
-                <label className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-green-300 dark:hover:border-green-700 transition-all group">
-                  <div className="relative flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={isWhitelisted}
-                      onChange={(e) => setIsWhitelisted(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-green-600 peer-checked:border-green-600 transition-all duration-200 flex items-center justify-center">
-                      <svg className={`w-3 h-3 text-white transition-all duration-200 ${isWhitelisted ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                {/* Date Range + Time */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+                    Date & Time Range
+                  </label>
+                  <DateRangeTimePicker
+                    startDate={startDate}
+                    endDate={endDate}
+                    startTime={startTime}
+                    endTime={endTime}
+                    onStartDate={setStartDate}
+                    onEndDate={setEndDate}
+                    onStartTime={setStartTime}
+                    onEndTime={setEndTime}
+                    onClear={handleClearDates}
+                  />
+                </div>
+
+                {/* Locations */}
+                <div>
+                  <MultiSelectDropdown
+                    label="Locations"
+                    value={selectedLocations}
+                    onChange={setSelectedLocations}
+                    options={locationOptions}
+                    placeholder="All Locations"
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                    </div>
-                  </div>
-                  <span className={`text-sm font-medium transition-colors ${isWhitelisted ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400'}`}>
-                    Whitelisted
-                  </span>
-                </label>
+                    }
+                  />
+                </div>
+
+                {/* Checkpoints */}
+                <div>
+                  <MultiSelectDropdown
+                    label="Checkpoints"
+                    value={selectedCheckpoints}
+                    onChange={setSelectedCheckpoints}
+                    options={checkpointOptions}
+                    placeholder="All Checkpoints"
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    }
+                  />
+                </div>
+
+                {/* Generate button */}
+                <div className="flex items-end">
+                  <button
+                    onClick={handleGenerateReport}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm shadow-blue-200 dark:shadow-none"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Generate
+                  </button>
+                </div>
               </div>
 
-              {/* Clear Filters Button - Only show when report is generated */}
-              {reportData && (
+              {/* Watchlist toggles */}
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Show:</span>
+
+                {/* Blacklisted toggle */}
                 <button
-                  onClick={() => {
-                    setPlateNumber('');
-                    setStartDate(null);
-                    setEndDate(null);
-                    setSelectedLocations([]);
-                    setSelectedCheckpoints([]);
-                    setIsBlacklisted(false);
-                    setIsWhitelisted(false);
-                    setDatePickerError(null);
-                    setReportData(null);
-                    setError(null);
-                  }}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  type="button"
+                  onClick={() => setIsBlacklisted(!isBlacklisted)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
+                    ${isBlacklisted
+                      ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-red-300 dark:hover:border-red-700'
+                    }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Clear Filters
+                  <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isBlacklisted ? 'bg-red-600 border-red-600' : 'border-gray-300 dark:border-slate-500'}`}>
+                    {isBlacklisted && <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  Blacklisted only
                 </button>
+
+                {/* Whitelisted toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsWhitelisted(!isWhitelisted)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
+                    ${isWhitelisted
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-green-300 dark:hover:border-green-700'
+                    }`}
+                >
+                  <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isWhitelisted ? 'bg-green-600 border-green-600' : 'border-gray-300 dark:border-slate-500'}`}>
+                    {isWhitelisted && <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  Whitelisted only
+                </button>
+              </div>
+
+              {/* Active filter pills */}
+              {activeFilters.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {activeFilters.map(f => <FilterPill key={f.key} label={f.label} onRemove={f.onRemove} />)}
+                </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Error State */}
+        {/* ── Error ── */}
         {!loading && error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 mb-8">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h3 className="text-red-800 dark:text-red-300 font-semibold mb-1">{error.title || 'Error Generating Report'}</h3>
-                <p className="text-red-700 dark:text-red-400 text-sm">{error.message || error}</p>
-              </div>
+          <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl mb-6">
+            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400">{error.title || 'Error'}</p>
+              <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">{error.message || String(error)}</p>
             </div>
           </div>
         )}
 
-        {/* No Data State - Show when report is generated but has no data */}
-        {!loading && reportData && reportData.summary_data && reportData.summary_data.length === 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 mb-8">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="opacity-40 grayscale">
-                <Loader staticMode={true} showDots={false} />
+        {/* ── Empty state ── */}
+        {!loading && reportData && reportData.summary_data?.length === 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm p-12 mb-6">
+            <div className="flex flex-col items-center text-center max-w-md mx-auto">
+              {/* Icon */}
+              <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 mt-6">No Data Found</h3>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                No records found for the selected filters. Try adjusting your date range or filters.
+              
+              {/* Title */}
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                No vehicle logs found for selected filters
+              </h3>
+              
+              {/* Description */}
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Reports show data based on your selected filters. Try adjusting your date range, locations, or other filters to see results.
               </p>
+              
+              {/* Divider */}
+              <div className="w-full border-t border-gray-200 dark:border-slate-700 my-4"></div>
+              
+              {/* Suggestions */}
+              <div className="text-left w-full">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Suggestions:</p>
+                <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <li className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>Try selecting a broader date range</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>Check if the selected locations have data</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>Clear all filters to see all available data</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Report Results Table */}
-        {!loading && canViewTable && reportData && reportData.summary_data && reportData.summary_data.length > 0 && (
-          <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 mb-8">
-            {/* Pagination Loading Overlay */}
-            {paginationLoading && (
-              <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-xl">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Loading...</p>
-                </div>
+        {/* ── Results Table ── */}
+        {!loading && canViewTable && reportData?.summary_data?.length > 0 && (
+          <div className="relative bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
+
+            {/* Page-loading overlay */}
+            {pageLoading && (
+              <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-2xl">
+                <div className="w-8 h-8 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 rounded-full animate-spin" />
               </div>
             )}
 
-            {/* Header */}
-            <div className="p-4 md:p-6 border-b border-gray-200 dark:border-slate-700">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <h2 className="text-base md:text-lg font-bold text-gray-900 dark:text-white">Report Results ({filteredLogs.length} records)</h2>
+            {/* Table header */}
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+                  Results
+                  <span className="ml-2 px-2 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 text-xs rounded-full font-medium">
+                    {pagination.total_records?.toLocaleString() || filteredLogs.length}
+                  </span>
+                </h2>
+                {isSameDay && startTime && (
+                  <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 font-medium">
+                    ⏱ Time-filtered: {FORMAT_DATE(startDate)} · {startTime || '00:00'} – {endTime || '23:59'}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                    placeholder="Search plate…"
+                    className="pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all w-44"
+                  />
+                </div>
+
+                {/* Excel export */}
                 {canExportExcel && (
                   <button
                     onClick={handleExcelExport}
                     disabled={exportingExcel}
-                    className="px-4 py-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-sm font-semibold rounded-lg border border-emerald-200 dark:border-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {exportingExcel ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-green-700 dark:border-green-400 border-t-transparent rounded-full animate-spin"></div>
-                        Downloading... {exportProgress}%
+                        <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                        {Math.round(exportProgress)}%
                       </>
                     ) : (
                       <>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                         </svg>
-                        Download Excel
+                        Export Excel
                       </>
                     )}
                   </button>
                 )}
               </div>
-
-              {/* Excel Export Progress Bar */}
-              {exportingExcel && (
-                <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                      </svg>
-                      <p className="text-sm font-semibold text-green-900 dark:text-green-100">
-                        {exportProgress < 30 ? 'Preparing Excel file...' : 
-                         exportProgress < 90 ? 'Downloading...' : 
-                         exportProgress < 100 ? 'Finalizing...' : 
-                         'Complete!'}
-                      </p>
-                    </div>
-                    <span className="text-sm font-bold text-green-700 dark:text-green-300">
-                      {exportProgress}%
-                    </span>
-                  </div>
-                  
-                  {/* Progress Bar */}
-                  <div className="relative w-full h-2.5 bg-green-100 dark:bg-green-900/30 rounded-full overflow-hidden">
-                    <div 
-                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-emerald-500 dark:from-green-600 dark:to-emerald-600 transition-all duration-300 ease-out rounded-full"
-                      style={{ width: `${exportProgress}%` }}
-                    >
-                      {/* Animated shine effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                    </div>
-                  </div>
-                  
-                  <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                    Please wait while we generate your Excel report...
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Search Bar */}
-            <div className="p-4 md:p-6 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/30">
-              <div className="relative max-w-md">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by plate number..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 text-sm transition-all duration-200 hover:border-gray-400 dark:hover:border-slate-500"
+            {/* Export progress bar */}
+            {exportingExcel && (
+              <div className="h-0.5 bg-gray-100 dark:bg-slate-700">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-300"
+                  style={{ width: `${exportProgress}%` }}
                 />
               </div>
-            </div>
+            )}
 
-            {/* Desktop Table View */}
+            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-700/30">
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Checkpoint</th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Plate Number</th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Number Plate</th>
+                  <tr className="bg-gray-50 dark:bg-slate-700/30 border-b border-gray-100 dark:border-slate-700">
+                    {['Location', 'Checkpoint', 'Date & Time', 'Plate', 'Image'].map(h => (
+                      <th key={h} className="text-left py-3 px-6 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {currentLogs.map((log, index) => {
-                    const date = new Date(log.timestamp);
-                    const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                    const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+                  {filteredLogs.map((log) => {
+                    const ts   = new Date(log.timestamp);
+                    const dStr = ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const tStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
                     return (
-                      <tr key={log.log_id} className={`transition-colors ${log.is_blacklisted
-                        ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
-                        : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'
-                        } ${index < currentLogs.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}>
-                        <td className="py-5 px-6">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{log.location_name}</span>
-                        </td>
-                        <td className="py-5 px-6">
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{log.checkpoint_name}</span>
-                        </td>
-                        <td className="py-5 px-6">
-                          <div className="text-sm text-gray-900 dark:text-white">
-                            <div className="font-medium">{formattedDate}</div>
-                            <div className="text-gray-600 dark:text-gray-400">{formattedTime}</div>
+                      <tr
+                        key={log.log_id}
+                        className={`transition-colors ${log.is_blacklisted
+                          ? 'bg-red-50/60 dark:bg-red-900/10 hover:bg-red-50 dark:hover:bg-red-900/20'
+                          : 'hover:bg-gray-50/80 dark:hover:bg-slate-700/30'
+                        }`}
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-2">
+                            {log.is_blacklisted && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                            )}
+                            <span className="text-sm font-medium text-gray-800 dark:text-white truncate max-w-[140px]">{log.location_name}</span>
                           </div>
                         </td>
-                        <td className="py-5 px-6">
-                          <CopyButton 
-                            text={log.plate_number} 
-                            className="text-sm font-bold text-gray-900 dark:text-white"
-                          />
+                        <td className="py-4 px-6">
+                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[140px] block">{log.checkpoint_name}</span>
                         </td>
-                        <td className="py-5 px-6">
+                        <td className="py-4 px-6">
+                          <span className="text-sm text-gray-800 dark:text-white font-medium">{dStr}</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 block">{tStr}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <CopyButton text={log.plate_number} className="text-sm font-bold font-mono text-gray-800 dark:text-white" />
+                          {log.is_blacklisted && (
+                            <span className="mt-1 block text-[10px] font-semibold text-red-500 uppercase tracking-wider">Blacklisted</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6">
                           <img
                             src={getPlateImage(log)}
                             alt="Plate"
-                            onClick={() => openDetailsModal(log)}
-                            onError={(e) => {
-                              console.error('Failed to load plate image, using placeholder');
-                              e.target.src = '/placeholder-plate.svg';
-                            }}
+                            onClick={() => openModal(log)}
+                            onError={(e) => { e.target.src = '/placeholder-plate.svg'; }}
                             crossOrigin="anonymous"
-                            className="w-32 h-16 object-contain rounded border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                            className="h-10 w-28 object-contain rounded-lg border border-gray-200 dark:border-slate-700 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:border-blue-400 transition-all"
                           />
                         </td>
                       </tr>
@@ -1314,179 +1195,114 @@ const Reports = () => {
               </table>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="md:hidden p-3 space-y-3">
-              {currentLogs.map((log) => {
-                const date = new Date(log.timestamp);
-                const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            {/* Mobile cards */}
+            <div className="md:hidden p-3 space-y-2.5">
+              {filteredLogs.map((log) => {
+                const ts   = new Date(log.timestamp);
+                const dStr = ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const tStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
                 return (
-                  <div key={log.log_id} className={`rounded-lg p-3 border shadow-sm ${log.is_blacklisted
-                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                    : 'bg-white dark:bg-slate-700/50 border-gray-200 dark:border-slate-600'
-                    }`}>
-                    {/* Header with Plate Number */}
-                    <div className="flex items-center justify-between mb-2">
-                      <CopyButton 
-                        text={log.plate_number} 
-                        className="text-sm font-bold text-gray-900 dark:text-white"
-                      />
-                    </div>
-
-                    {/* Location & Checkpoint */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span>{log.location_name}</span>
-                      </div>
-                      <span className="text-gray-400">•</span>
-                      <span className="text-xs text-gray-600 dark:text-gray-400">{log.checkpoint_name}</span>
-                    </div>
-
-                    {/* View Images Button */}
-                    <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div
+                    key={log.log_id}
+                    className={`rounded-xl p-3.5 border ${log.is_blacklisted
+                      ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                      : 'bg-white dark:bg-slate-700/50 border-gray-200 dark:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2.5">
                       <div>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">Plate</p>
-                        <img
-                          src={getPlateImage(log)}
-                          alt="Plate"
-                          onClick={() => openDetailsModal(log)}
-                          onError={(e) => {
-                            console.error('Failed to load plate image, using placeholder');
-                            e.target.src = '/placeholder-plate.svg';
-                          }}
-                          crossOrigin="anonymous"
-                          className="w-full h-20 object-contain rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
-                        />
+                        <CopyButton text={log.plate_number} className="text-sm font-bold font-mono text-gray-800 dark:text-white" />
+                        {log.is_blacklisted && <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider block mt-0.5">Blacklisted</span>}
                       </div>
-                      <div>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">Vehicle</p>
-                        <img
-                          src={getVehicleImage(log)}
-                          alt="Vehicle"
-                          onClick={() => openDetailsModal(log)}
-                          onError={(e) => {
-                            console.error('Failed to load vehicle image, using placeholder');
-                            e.target.src = '/placeholder-vehicle.svg';
-                          }}
-                          crossOrigin="anonymous"
-                          className="w-full h-20 object-contain rounded border border-gray-200 dark:border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
-                        />
-                      </div>
+                      <span className="text-xs text-gray-400">{dStr} · {tStr}</span>
                     </div>
-
-                    {/* Timestamp */}
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       </svg>
-                      <span>{formattedDate} at {formattedTime}</span>
+                      {log.location_name} · {log.checkpoint_name}
                     </div>
+                    <img
+                      src={getPlateImage(log)}
+                      alt="Plate"
+                      onClick={() => openModal(log)}
+                      onError={(e) => { e.target.src = '/placeholder-plate.svg'; }}
+                      crossOrigin="anonymous"
+                      className="w-full h-16 object-contain rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer"
+                    />
                   </div>
                 );
               })}
             </div>
 
-            {/* Pagination */}
-            <div className="p-4 md:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/20">
-              {/* Results Info */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm gap-3 mb-4">
-                <span className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm">
-                  Showing {((pagination.page || 1) - 1) * (pagination.page_size || itemsPerPage) + 1} to {Math.min((pagination.page || 1) * (pagination.page_size || itemsPerPage), pagination.total_records || 0)} of {pagination.total_records || 0} entries
+            {/* Pagination footer */}
+            <div className="px-6 py-4 border-t border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-700/10 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {((pagination.page||1)-1) * (pagination.page_size||itemsPerPage) + 1}–{Math.min((pagination.page||1)*(pagination.page_size||itemsPerPage), pagination.total_records||0)} of {(pagination.total_records||0).toLocaleString()}
                 </span>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <label className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm whitespace-nowrap">Show:</label>
-                  <div className="w-full sm:w-40">
-                    <CustomDropdown
-                      value={itemsPerPage}
-                      onChange={handlePageSizeChange}
-                      options={entriesOptions}
-                      showSearch={false}
-                      icon={
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                      }
-                    />
-                  </div>
-                </div>
+                <CustomDropdown
+                  value={itemsPerPage}
+                  onChange={(v) => { setItemsPerPage(v); setCurrentPage(1); }}
+                  options={[{value:50,label:'50/page'},{value:75,label:'75/page'},{value:100,label:'100/page'}]}
+                />
+              </div>
 
-                {/* Pagination Controls */}
-                <div className="flex items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
-                  {/* Go to First Page */}
-                  <button
-                    onClick={handleGoToFirstPage}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 dark:text-gray-300"
-                    title="Go to first page"
-                  >
-                    First
-                  </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  disabled={!pagination.has_previous}
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
 
-                  {/* Previous Page */}
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={!pagination.has_previous}
-                    className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pg;
+                  if (totalPages <= 5)       pg = i + 1;
+                  else if (currentPage <= 3) pg = i + 1;
+                  else if (currentPage >= totalPages - 2) pg = totalPages - 4 + i;
+                  else pg = currentPage - 2 + i;
+                  return (
+                    <button
+                      key={pg}
+                      onClick={() => setCurrentPage(pg)}
+                      className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                        currentPage === pg
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {pg}
+                    </button>
+                  );
+                })}
 
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'
-                            }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Next Page */}
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={!pagination.has_next}
-                    className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
+                <button
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  disabled={!pagination.has_next}
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                </button>
               </div>
             </div>
+
           </div>
         )}
       </div>
 
-      {/* Vehicle Details Modal */}
       <VehicleDetailsModal
         isOpen={detailsModalOpen}
-        onClose={closeDetailsModal}
+        onClose={closeModal}
         vehicleData={selectedVehicle}
         getPlateImage={getPlateImage}
         getVehicleImage={getVehicleImage}
