@@ -34,7 +34,7 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
       <BlacklistDetailsModal 
         isOpen={showBlacklistModal} 
         onClose={() => setShowBlacklistModal(false)} 
-        appliedFilters={appliedFilters}
+        dashboardData={data}
       />
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 mb-8 overflow-hidden">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
