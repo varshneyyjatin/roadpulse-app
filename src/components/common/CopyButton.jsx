@@ -12,8 +12,7 @@ const CopyButton = ({ text, className = '' }) => {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    } catch {
       // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = text;
@@ -25,8 +24,8 @@ const CopyButton = ({ text, className = '' }) => {
         document.execCommand('copy');
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      } catch (err2) {
-        console.error('Fallback copy failed:', err2);
+      } catch {
+        // ignore fallback copy failure
       }
       document.body.removeChild(textArea);
     }

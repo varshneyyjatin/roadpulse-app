@@ -139,10 +139,6 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicle }) => {
         isOpen={showWatchlistModal}
         onClose={() => setShowWatchlistModal(false)}
         vehicleNumber={vehicle?.vehicleNumber}
-        onSuccess={(data) => {
-          console.log('Added to watchlist:', data);
-          // You can show a success toast here
-        }}
       />
     </div>
   );

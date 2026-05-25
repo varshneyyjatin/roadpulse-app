@@ -26,7 +26,6 @@ const Notifications = () => {
       setNotifications(data.notifications || []);
       setError(null);
     } catch (err) {
-      console.error('Error fetching notifications:', err);
       const errorInfo = handleApiError(err);
       setError(errorInfo.error);
     } finally {
@@ -75,7 +74,6 @@ const Notifications = () => {
       }, 100);
 
     } catch (err) {
-      console.error('Error marking notifications as read:', err);
       const errorInfo = handleApiError(err);
       alert(errorInfo.error.message || 'Failed to mark notifications as read');
     } finally {

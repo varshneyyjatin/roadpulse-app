@@ -13,8 +13,7 @@ const urlToBase64 = async (url) => {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
-  } catch (error) {
-    console.error('Error converting image:', error);
+  } catch {
     return null;
   }
 };
@@ -104,8 +103,8 @@ export const exportToExcel = async (data, getPlateImage, getVehicleImage, filena
             ext: { width: 150, height: 70 }
           });
         }
-      } catch (error) {
-        console.error('Error adding plate image:', error);
+      } catch {
+        // skip plate image on error
       }
 
       // Add vehicle image
@@ -124,8 +123,8 @@ export const exportToExcel = async (data, getPlateImage, getVehicleImage, filena
             ext: { width: 150, height: 70 }
           });
         }
-      } catch (error) {
-        console.error('Error adding vehicle image:', error);
+      } catch {
+        // skip vehicle image on error
       }
 
       // Report progress
@@ -163,8 +162,7 @@ export const exportToExcel = async (data, getPlateImage, getVehicleImage, filena
 
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     return { success: true, message: 'Excel file with images downloaded successfully!', totalTime };
-  } catch (error) {
-    console.error('Error exporting to Excel:', error);
+  } catch {
     return { success: false, message: 'Failed to export Excel file.' };
   }
 };
@@ -207,8 +205,7 @@ export const exportToCSV = (data, filename = 'vehicle-report') => {
     document.body.removeChild(link);
 
     return { success: true, message: 'CSV file downloaded successfully!' };
-  } catch (error) {
-    console.error('Error exporting to CSV:', error);
+  } catch {
     return { success: false, message: 'Failed to export CSV file.' };
   }
 };

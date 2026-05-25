@@ -51,7 +51,6 @@ const Watchlist = () => {
       }
 
       const result = await response.json();
-      console.log('Watchlist API Response:', result);
       
       // Handle different response formats
       let data = [];
@@ -65,7 +64,6 @@ const Watchlist = () => {
       
       setWatchlistData(data);
     } catch (err) {
-      console.error('Watchlist fetch error:', err);
       const errorInfo = handleApiError(err);
       setError(errorInfo.error);
     } finally {

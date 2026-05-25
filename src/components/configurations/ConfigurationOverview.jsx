@@ -7,12 +7,6 @@ const ConfigurationOverview = ({ onNavigate }) => {
   const canViewCameraSettings = hasPermissionForComponent('Configurations', 'comp031', 'can_view');
   const canViewCheckpointSettings = hasPermissionForComponent('Configurations', 'comp033', 'can_view');
   const canViewUserAccessSettings = hasPermissionForComponent('Configurations', 'comp035', 'can_view');
-  
-  console.log('Configuration Permissions:', {
-    canViewCameraSettings,
-    canViewCheckpointSettings,
-    canViewUserAccessSettings
-  });
 
   return (
     <div>
