@@ -73,8 +73,7 @@ const Navbar = ({ setActiveTab, onLogout }) => {
       const data = await response.json();
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
+    } catch {
       setNotifications([]);
       setUnreadCount(0);
     } finally {

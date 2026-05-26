@@ -26,13 +26,10 @@ const CheckpointSettings = ({ hasPermissionForComponent }) => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching checkpoints...');
       const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/configuration/assigned-resources`, {
         method: 'POST',
         body: JSON.stringify({ scope: 'checkpoints' })
       });
-
-      console.log('Checkpoint response status:', response.status);
 
       if (!response.ok) {
         const error = new Error('API Error');
@@ -41,11 +38,9 @@ const CheckpointSettings = ({ hasPermissionForComponent }) => {
       }
 
       const data = await response.json();
-      console.log('Checkpoint data received:', data);
       setCheckpoints(data.data || []);
       setFilteredCheckpoints(data.data || []);
     } catch (err) {
-      console.error('Checkpoint fetch error:', err);
       const errorInfo = handleApiError(err);
       setError(errorInfo.error);
     } finally {
@@ -87,11 +82,8 @@ const CheckpointSettings = ({ hasPermissionForComponent }) => {
 
   // If no permission, don't render anything (card won't be shown in overview)
   if (!canViewCheckpointSettings) {
-    console.log('No permission to view checkpoint settings');
     return null;
   }
-
-  console.log('Checkpoint Settings - Loading:', loading, 'Error:', error, 'Checkpoints:', checkpoints.length);
 
   return (
     <div className="space-y-6">

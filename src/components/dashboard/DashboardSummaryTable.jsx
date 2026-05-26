@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useAccessControl } from '../../contexts/AccessControl';
 import AddToWatchlistModal from './AddToWatchlistModal';
 import FixVehicleNumberModal from './FixVehicleNumberModal';
 import TimelineModal from './TimelineModal';
@@ -17,11 +18,9 @@ const CopyablePlateNumber = ({ plateNumber, className = '' }) => {
     
     try {
       await navigator.clipboard.writeText(plateNumber);
-      console.log('Copied:', plateNumber);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    } catch {
       // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = plateNumber;
@@ -31,11 +30,10 @@ const CopyablePlateNumber = ({ plateNumber, className = '' }) => {
       textArea.select();
       try {
         document.execCommand('copy');
-        console.log('Copied using fallback:', plateNumber);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      } catch (err2) {
-        console.error('Fallback copy failed:', err2);
+      } catch {
+        // ignore fallback copy failure
       }
       document.body.removeChild(textArea);
     }
@@ -195,6 +193,9 @@ const CustomDropdown = ({ label, value, onChange, options, placeholder, icon, sh
 };
 
 const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false, canFixVehicleNumber = false, canDownloadImage = false, onDataRefresh, onPageChange }) => {
+  const { user } = useAccessControl();
+  const isCreator = user?.role?.toLowerCase() === 'creator';
+
   const vehicleLogs = data?.summary_data || [];
   const pagination = data?.pagination || {};
 
@@ -322,12 +323,9 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
     const plateImageUrl = log.latest_data_number_plate_image || log.number_plate_image;
     
     if (plateImageUrl) {
-      console.log('🖼️ Plate Image URL:', plateImageUrl);
       return plateImageUrl;
     }
     
-    // Fallback to placeholder
-    console.log('⚠️ No plate image URL found, using placeholder');
     return '/placeholder-plate.svg';
   };
 
@@ -336,12 +334,9 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
     const vehicleImageUrl = log.latest_data_vehicle_image || log.vehicle_image;
     
     if (vehicleImageUrl) {
-      console.log('🚗 Vehicle Image URL:', vehicleImageUrl);
       return vehicleImageUrl;
     }
     
-    // Fallback to placeholder
-    console.log('⚠️ No vehicle image URL found, using placeholder');
     return '/placeholder-vehicle.svg';
   };
 
@@ -594,6 +589,9 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Checkpoint</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Plate Number</th>
+              {isCreator && (
+                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Vehicle Type</th>
+              )}
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Number Plate</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timeline</th>
               {/* Action column - only show if user has comp004 or comp005 */}
@@ -632,6 +630,13 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                       className="text-gray-900 dark:text-white"
                     />
                   </td>
+                  {isCreator && (
+                    <td className="py-5 px-6">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {log.vehicle_type || '—'}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-5 px-6">
                     <img
                       style={{borderRadius: "10px"}}
@@ -639,7 +644,6 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                       alt="Plate"
                       onClick={() => openDetailsModal(log)}
                       onError={(e) => {
-                        console.error('Failed to load plate image, using placeholder');
                         e.target.src = '/placeholder-plate.svg';
                       }}
                       crossOrigin="anonymous"
@@ -699,8 +703,6 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                             <div className="group relative">
                               <button
                                 onClick={() => {
-                                  console.log('Selected vehicle for fix:', log);
-                                  console.log('log_id:', log.log_id);
                                   setSelectedVehicleForFix(log);
                                   setShowFixVehicleModal(true);
                                 }}
@@ -836,7 +838,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
               </div>
 
               {/* Location & Checkpoint */}
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -846,6 +848,12 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                 </div>
                 <span className="text-gray-400">•</span>
                 <span className="text-xs text-gray-600 dark:text-gray-400">{log.checkpoint_name}</span>
+                {isCreator && log.vehicle_type && (
+                  <>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{log.vehicle_type}</span>
+                  </>
+                )}
               </div>
 
               {/* Number Plate Image */}
@@ -856,7 +864,6 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                   alt="Plate"
                   onClick={() => openDetailsModal(log)}
                   onError={(e) => {
-                    console.error('Failed to load plate image, using placeholder');
                     e.target.src = '/placeholder-plate.svg';
                   }}
                   crossOrigin="anonymous"
@@ -1002,10 +1009,6 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
         vehicleId={selectedVehicle?.vehicle_id}
         isBlacklisted={selectedVehicle?.is_blacklisted}
         isWhitelisted={selectedVehicle?.is_whitelisted}
-        onSuccess={(data) => {
-          console.log('Added to watchlist:', data);
-          // You can show a success toast here
-        }}
       />
 
       {/* Fix Vehicle Number Modal */}
@@ -1014,9 +1017,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
         onClose={() => setShowFixVehicleModal(false)}
         currentPlateNumber={selectedVehicleForFix?.plate_number}
         logId={selectedVehicleForFix?.log_id}
-        onSuccess={(data) => {
-          console.log('Vehicle number updated:', data);
-          // Refresh dashboard data
+        onSuccess={() => {
           if (onDataRefresh) {
             onDataRefresh();
           }

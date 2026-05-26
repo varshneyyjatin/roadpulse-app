@@ -83,8 +83,7 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
       `;
       document.body.appendChild(successDiv);
       setTimeout(() => successDiv.remove(), 3000);
-    } catch (error) {
-      console.error('Error downloading image:', error);
+    } catch {
       // Show a better error notification
       const errorDiv = document.createElement('div');
       errorDiv.className = 'fixed top-4 right-4 bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg shadow-lg z-[100] animate-shake';
@@ -141,7 +140,6 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
                   src={getVehicleImage(vehicleData)}
                   alt="Vehicle"
                   onError={(e) => {
-                    console.error('Failed to load vehicle image, using placeholder');
                     e.target.src = '/placeholder-vehicle.svg';
                   }}
                   crossOrigin="anonymous"
@@ -161,7 +159,6 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
                     src={getPlateImage(vehicleData)}
                     alt="Plate"
                     onError={(e) => {
-                      console.error('Failed to load plate image, using placeholder');
                       e.target.src = '/placeholder-plate.svg';
                     }}
                     crossOrigin="anonymous"

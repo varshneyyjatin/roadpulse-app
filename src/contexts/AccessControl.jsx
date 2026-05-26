@@ -121,7 +121,6 @@ const AccessControlProvider = ({ children }) => {
         setSelectedLocation(data.access_control.locations[0]);
       }
     } catch (error) {
-      console.error('Failed to fetch permissions:', error);
       // Don't logout here - axios interceptor will handle 401
       if (error.response?.status !== 401) {
         logout();
@@ -152,32 +151,26 @@ const AccessControlProvider = ({ children }) => {
 
   const hasPermissionForComponent = (tabName, componentCode, permission) => {
     if (!accessControl) {
-      console.log('No accessControl data');
       return false;
     }
 
     const tab = accessControl.tabs.find(t => t.tab_name === tabName);
     if (!tab) {
-      console.log(`Tab "${tabName}" not found. Available tabs:`, accessControl.tabs.map(t => t.tab_name));
       return false;
     }
 
     // If no components are assigned to the tab (empty array), grant all permissions
     if (tab.components.length === 0) {
-      console.log(`Tab "${tabName}" has no components, granting all permissions`);
       return true;
     }
 
     // Otherwise, check specific component permission
     const component = tab.components.find(c => c.component_code === componentCode);
     if (!component) {
-      console.log(`Component "${componentCode}" not found in tab "${tabName}"`);
       return false;
     }
 
-    const hasPermission = component.permissions[permission] === true;
-    console.log(`Permission check: ${tabName}.${componentCode}.${permission} = ${hasPermission}`);
-    return hasPermission;
+    return component.permissions[permission] === true;
   };
 
   const value = {

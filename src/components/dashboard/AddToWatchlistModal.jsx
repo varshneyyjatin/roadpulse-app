@@ -118,8 +118,6 @@ const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlac
         requestBody.plate_number = finalVehicleNumber;
       }
 
-      console.log('🚀 Watchlist API Request:', requestBody);
-
       const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/watchlist/`, {
         method: 'POST',
         body: JSON.stringify(requestBody)
@@ -136,7 +134,6 @@ const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlac
       }
 
       const data = await response.json();
-      console.log('✅ Watchlist API Response:', data);
       
       setSuccess(true);
       if (onSuccess) onSuccess(data);
