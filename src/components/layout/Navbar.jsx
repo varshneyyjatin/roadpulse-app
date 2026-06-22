@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useAccessControl } from '../../contexts/AccessControl';
 import TabSequenceModal from './TabSequenceModal';
 import { saveTabOrder } from '../../utils/tabOrderStorage';
-import { fetchWithAuth } from '../../utils/fetchWrapper';
+import { getMyNotifications, getUnreadCount } from '../../utils/notificationApi';
+import { getCategoryStyle } from '../../utils/notificationHelpers';
+import NotificationAlertPreferences from '../notifications/NotificationAlertPreferences';
+import { canManageNotificationPreferences } from '../../utils/userRole';
 
 const Navbar = ({ setActiveTab, onLogout }) => {
   const { user, accessControl, selectedLocation, setSelectedLocation, logout } = useAccessControl();
+  const canManagePrefs = canManageNotificationPreferences(user);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMyAccountModal, setShowMyAccountModal] = useState(false);
@@ -58,21 +62,17 @@ const Navbar = ({ setActiveTab, onLogout }) => {
     return user.username.substring(0, 2).toUpperCase();
   };
 
-  // Fetch notifications
   const fetchNotifications = async (showLoading = true) => {
     try {
       if (showLoading) {
         setNotificationsLoading(true);
       }
-      const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/notifications/my-notifications?nav_notification=true`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications');
-      }
-      
-      const data = await response.json();
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unread_count || 0);
+      const [navData, countData] = await Promise.all([
+        getMyNotifications({ nav_notification: true }),
+        getUnreadCount(),
+      ]);
+      setNotifications(navData.notifications || []);
+      setUnreadCount(countData.unread_count ?? navData.unread_count ?? 0);
     } catch {
       setNotifications([]);
       setUnreadCount(0);
@@ -262,9 +262,11 @@ const Navbar = ({ setActiveTab, onLogout }) => {
                     ) : (
                       <>
                         <div className="overflow-y-auto flex-1 max-h-[380px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent">
-                          {notifications.map((notification, index) => (
+                          {notifications.map((notification, index) => {
+                            const catStyle = getCategoryStyle(notification);
+                            return (
                             <div 
-                              key={index}
+                              key={notification.notification_id ?? index}
                               onClick={() => {
                                 setShowAlertDropdown(false);
                                 setActiveTab('Notifications');
@@ -272,21 +274,10 @@ const Navbar = ({ setActiveTab, onLogout }) => {
                               className="group p-3.5 border-b border-gray-100 dark:border-slate-700 last:border-b-0 hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-all duration-200 cursor-pointer"
                             >
                               <div className="flex items-start gap-3">
-                                {/* Clean Icon */}
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                  notification.notification_type === 'watchlist_alert' 
-                                    ? 'bg-red-100 dark:bg-red-900/30' 
-                                    : 'bg-blue-100 dark:bg-blue-900/30'
-                                }`}>
-                                  {notification.notification_type === 'watchlist_alert' ? (
-                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                  ) : (
-                                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  )}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${catStyle.iconClass}`}>
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                  </svg>
                                 </div>
                                 
                                 <div className="flex-1 min-w-0">
@@ -299,7 +290,8 @@ const Navbar = ({ setActiveTab, onLogout }) => {
                                 </div>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                         
                         {/* Clean View All Button */}
@@ -475,18 +467,27 @@ const Navbar = ({ setActiveTab, onLogout }) => {
       </nav>
 
       {showSettingsModal && (
-        <div className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center" onClick={() => setShowSettingsModal(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
+        <div className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4" onClick={() => setShowSettingsModal(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[min(90vh,640px)] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between flex-shrink-0 px-6 py-5 border-b border-gray-200 dark:border-slate-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Settings</h2>
-              <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+              <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
             </div>
-            
-            <div className="p-6 space-y-4">
+
+            <div className="flex-1 min-h-0 overflow-y-auto settings-modal-scroll px-6 py-6 space-y-6">
+              {canManagePrefs && (
+                <div className="pb-6 border-b border-gray-200 dark:border-slate-700">
+                  <NotificationAlertPreferences />
+                </div>
+              )}
+
               {/* Change Tabs Sequence */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Tabs</label>
@@ -550,9 +551,9 @@ const Navbar = ({ setActiveTab, onLogout }) => {
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-slate-700">
-              <button onClick={() => setShowSettingsModal(false)} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:shadow-md rounded-lg transition">Close</button>
+
+            <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/80">
+              <button onClick={() => setShowSettingsModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Close</button>
             </div>
           </div>
         </div>

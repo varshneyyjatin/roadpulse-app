@@ -615,6 +615,7 @@ const Reports = () => {
   const [endTime,      setEndTime]      = useState('');
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [isWhitelisted, setIsWhitelisted] = useState(false);
+  const [direction, setDirection] = useState(null); // null | 'in' | 'out'
 
   // Data state
   const [reportData, setReportData]   = useState(null);
@@ -686,8 +687,9 @@ const Reports = () => {
     };
     if (isBlacklisted) body.is_blacklisted = true;
     if (isWhitelisted) body.is_whitelisted = true;
+    if (direction) body.direction = direction;
     return { ...body, ...overrides };
-  }, [selectedLocations, selectedCheckpoints, plateNumber, startDate, endDate, startTime, endTime, isSameDay, currentPage, itemsPerPage, isBlacklisted, isWhitelisted]);
+  }, [selectedLocations, selectedCheckpoints, plateNumber, startDate, endDate, startTime, endTime, isSameDay, currentPage, itemsPerPage, isBlacklisted, isWhitelisted, direction]);
 
   // ── Validation ───────────────────────────────────────────────────────────
 
@@ -787,6 +789,7 @@ const Reports = () => {
 
   const pagination  = reportData?.pagination || {};
   const totalPages  = pagination.total_pages || 1;
+  const hasDirectionData = ((reportData?.approaching_count || 0) + (reportData?.departing_count || 0)) > 0;
 
   // ── Image helpers ────────────────────────────────────────────────────────
 
@@ -806,13 +809,14 @@ const Reports = () => {
     if (selectedCheckpoints.length) pills.push({ key: 'cp', label: `${selectedCheckpoints.length} Checkpoint${selectedCheckpoints.length > 1 ? 's' : ''}`, onRemove: () => setSelectedCheckpoints([]) });
     if (isBlacklisted) pills.push({ key: 'bl', label: 'Blacklisted', onRemove: () => setIsBlacklisted(false) });
     if (isWhitelisted) pills.push({ key: 'wl', label: 'Whitelisted', onRemove: () => setIsWhitelisted(false) });
+    if (direction) pills.push({ key: 'dir', label: direction === 'in' ? 'Direction: IN' : 'Direction: OUT', onRemove: () => setDirection(null) });
     return pills;
-  }, [plateNumber, startDate, endDate, startTime, endTime, selectedLocations, selectedCheckpoints, isBlacklisted, isWhitelisted, isSameDay]);
+  }, [plateNumber, startDate, endDate, startTime, endTime, selectedLocations, selectedCheckpoints, isBlacklisted, isWhitelisted, direction, isSameDay]);
 
   const handleClearAll = () => {
     setPlateNumber(''); handleClearDates();
     setSelectedLocations([]); setSelectedCheckpoints([]);
-    setIsBlacklisted(false); setIsWhitelisted(false);
+    setIsBlacklisted(false); setIsWhitelisted(false); setDirection(null);
     setReportData(null); setError(null); setSearchQuery('');
   };
 
@@ -980,6 +984,38 @@ const Reports = () => {
                   </div>
                   Whitelisted only
                 </button>
+
+                {/* Approaching toggle */}
+                <button
+                  type="button"
+                  onClick={() => setDirection(d => d === 'in' ? null : 'in')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
+                    ${direction === 'in'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-blue-300 dark:hover:border-blue-700'
+                    }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                  IN only
+                </button>
+
+                {/* Departing toggle */}
+                <button
+                  type="button"
+                  onClick={() => setDirection(d => d === 'out' ? null : 'out')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
+                    ${direction === 'out'
+                      ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-orange-300 dark:hover:border-orange-700'
+                    }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                  OUT only
+                </button>
               </div>
 
               {/* Active filter pills */}
@@ -1138,7 +1174,7 @@ const Reports = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-slate-700/30 border-b border-gray-100 dark:border-slate-700">
-                    {['Location', 'Checkpoint', 'Date & Time', 'Plate', 'Image'].map(h => (
+                    {['Location', 'Checkpoint', 'Date & Time', 'Plate', ...(hasDirectionData ? ['Direction'] : []), 'Image'].map(h => (
                       <th key={h} className="text-left py-3 px-6 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -1178,6 +1214,23 @@ const Reports = () => {
                             <span className="mt-1 block text-[10px] font-semibold text-red-500 uppercase tracking-wider">Blacklisted</span>
                           )}
                         </td>
+                        {hasDirectionData && (
+                          <td className="py-4 px-6">
+                            {log.direction === 'in' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                                IN
+                              </span>
+                            ) : log.direction === 'out' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 text-xs font-semibold rounded-lg border border-orange-200 dark:border-orange-800 whitespace-nowrap">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                OUT
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-4 px-6">
                           <img
                             src={getPlateImage(log)}
@@ -1217,11 +1270,25 @@ const Reports = () => {
                       </div>
                       <span className="text-xs text-gray-400">{dStr} · {tStr}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      </svg>
-                      {log.location_name} · {log.checkpoint_name}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        </svg>
+                        {log.location_name} · {log.checkpoint_name}
+                      </div>
+                      {hasDirectionData && log.direction === 'in' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-semibold rounded-md border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                          IN
+                        </span>
+                      )}
+                      {hasDirectionData && log.direction === 'out' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 text-[10px] font-semibold rounded-md border border-orange-200 dark:border-orange-800 whitespace-nowrap">
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                          OUT
+                        </span>
+                      )}
                     </div>
                     <img
                       src={getPlateImage(log)}

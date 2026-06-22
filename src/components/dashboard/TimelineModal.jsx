@@ -68,11 +68,25 @@ const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400">{time} • {date}</p>
                           </div>
-                          {isLatest && (
-                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded">
-                              Latest
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {entry.direction === 'in' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-800">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                                IN
+                              </span>
+                            )}
+                            {entry.direction === 'out' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 text-xs font-semibold rounded-lg border border-orange-200 dark:border-orange-800">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                OUT
+                              </span>
+                            )}
+                            {isLatest && (
+                              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded">
+                                Latest
+                              </span>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Image Display */}

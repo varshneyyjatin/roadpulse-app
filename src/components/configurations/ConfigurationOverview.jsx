@@ -1,12 +1,13 @@
 import { useAccessControl } from '../../contexts/AccessControl';
 
 const ConfigurationOverview = ({ onNavigate }) => {
-  const { hasPermissionForComponent } = useAccessControl();
-  
+  const { hasPermissionForComponent, user } = useAccessControl();
+
   // Permission checks - if no components assigned, show all by default
   const canViewCameraSettings = hasPermissionForComponent('Configurations', 'comp031', 'can_view');
   const canViewCheckpointSettings = hasPermissionForComponent('Configurations', 'comp033', 'can_view');
   const canViewUserAccessSettings = hasPermissionForComponent('Configurations', 'comp035', 'can_view');
+  const isCreator = user?.role === 'creator';
 
   return (
     <div>
@@ -65,6 +66,33 @@ const ConfigurationOverview = ({ onNavigate }) => {
             </svg>
           </span>
         </div>
+        )}
+
+        {/* Direction Settings — Creator only */}
+        {isCreator && (
+          <div
+            onClick={() => onNavigate('direction')}
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-700 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Direction Settings</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Approaching & departing</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Configure direction tracking and LOI for each camera</p>
+            <span className="text-sm text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1">
+              Configure
+              <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
         )}
 
         {/* User Access Settings */}
