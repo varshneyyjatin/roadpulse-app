@@ -13,7 +13,6 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
   const blacklistedInView = data?.blacklisted_vehicle_count || 0;
   const totalLocations = data?.total_locations || 0;
   const totalCameras = data?.total_cameras || 0;
-
   // Check if date filter is applied
   const hasDateFilter = appliedFilters?.start_date || appliedFilters?.end_date;
   const vehicleCountLabel = hasDateFilter ? 'Filtered count' : "Today's count";
@@ -160,6 +159,8 @@ const DashboardKpis = ({ data, appliedFilters, locations }) => {
         </div>
 
       </div>
+
+
     </div>
     </>
   );

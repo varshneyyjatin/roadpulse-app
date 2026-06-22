@@ -136,3 +136,46 @@ html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
 html.dark .custom-scrollbar {
   scrollbar-color: #475569 #1e293b;
 }
+
+/* Settings modal — slim inset scrollbar inside panel */
+.settings-modal-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+.settings-modal-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.settings-modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 2px;
+  border-radius: 999px;
+}
+
+.settings-modal-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  border-radius: 999px;
+  min-height: 40px;
+}
+
+.settings-modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+}
+
+.settings-modal-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html.dark .settings-modal-scroll {
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+}
+
+html.dark .settings-modal-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+}
+
+html.dark .settings-modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+}
