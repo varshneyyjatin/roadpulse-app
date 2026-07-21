@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const CameraDetailsModal = ({ isOpen, onClose, locations }) => {
+  useBodyScrollLock(isOpen);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Close modal on Escape key

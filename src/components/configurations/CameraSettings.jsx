@@ -3,6 +3,7 @@ import { fetchWithAuth } from '../../utils/fetchWrapper';
 import { handleApiError } from '../../utils/apiErrorHandler';
 import { FullPageLoader } from '../common/Loader';
 import ErrorState from '../common/ErrorState';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const CameraSettings = ({ hasPermissionForComponent, onNavigateToAddCamera }) => {
   // Permission checks
@@ -16,6 +17,7 @@ const CameraSettings = ({ hasPermissionForComponent, onNavigateToAddCamera }) =>
   const [error, setError] = useState(null);
   const [selectedCamera, setSelectedCamera] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  useBodyScrollLock(showDetailsModal);
 
   useEffect(() => {
     fetchCameras();

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const FixVehicleNumberModal = ({ isOpen, onClose, currentPlateNumber, logId, onSuccess }) => {
+  useBodyScrollLock(isOpen);
   const [newVehicleNumber, setNewVehicleNumber] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);

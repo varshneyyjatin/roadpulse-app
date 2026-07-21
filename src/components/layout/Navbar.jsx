@@ -6,6 +6,7 @@ import { getMyNotifications, getUnreadCount } from '../../utils/notificationApi'
 import { getCategoryStyle } from '../../utils/notificationHelpers';
 import NotificationAlertPreferences from '../notifications/NotificationAlertPreferences';
 import { canManageNotificationPreferences } from '../../utils/userRole';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const Navbar = ({ setActiveTab, onLogout }) => {
   const { user, accessControl, selectedLocation, setSelectedLocation, logout } = useAccessControl();
@@ -14,6 +15,7 @@ const Navbar = ({ setActiveTab, onLogout }) => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMyAccountModal, setShowMyAccountModal] = useState(false);
   const [showTabSequenceModal, setShowTabSequenceModal] = useState(false);
+  useBodyScrollLock(showSettingsModal || showMyAccountModal);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showMobileLocationList, setShowMobileLocationList] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');

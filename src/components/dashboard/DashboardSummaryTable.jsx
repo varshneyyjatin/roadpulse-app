@@ -289,9 +289,25 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
     });
   }, [vehicleLogs, searchQuery, selectedLocation, selectedCheckpoint, showBlacklisted, showWhitelisted]);
 
+  // Direction column sort - click cycles: none -> "in" first -> "out" first -> none
+  const [directionSort, setDirectionSort] = useState(null); // null | 'asc' | 'desc'
+  const toggleDirectionSort = () => {
+    setDirectionSort(prev => (prev === null ? 'asc' : prev === 'asc' ? 'desc' : null));
+  };
+
+  const sortedLogs = useMemo(() => {
+    if (!directionSort) return filteredLogs;
+    const rank = { in: 0, out: 1 };
+    const withRank = (log) => rank[log.direction] ?? 2;
+    return [...filteredLogs].sort((a, b) => {
+      const diff = withRank(a) - withRank(b);
+      return directionSort === 'asc' ? diff : -diff;
+    });
+  }, [filteredLogs, directionSort]);
+
   // Use API pagination data
   const totalPages = pagination.total_pages || 1;
-  const currentLogs = filteredLogs; // Data already paginated from API
+  const currentLogs = sortedLogs; // Data already paginated from API, optionally re-sorted by direction client-side
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -385,6 +401,20 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
   const closeDetailsModal = () => {
     setDetailsModalOpen(false);
     setSelectedVehicleDetails(null);
+  };
+
+  // Clicking one entry inside the Timeline modal drills down into the same
+  // details modal used for "Number Plate", showing that entry's own images.
+  const handleTimelineEntryClick = (entry) => {
+    setShowTimelineModal(false);
+    openDetailsModal({
+      plate_number: selectedVehicleForTimeline?.plate_number,
+      location_name: entry.location_name,
+      checkpoint_name: entry.checkpoint_name,
+      timestamp: entry.time,
+      vehicle_image: entry.vehicle_image,
+      number_plate_image: entry.number_plate_image,
+    });
   };
 
   const openImageModal = (imageSrc, isPlate = false) => {
@@ -587,16 +617,38 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-700/30">
-              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
-              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Checkpoint</th>
+              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location / Checkpoint</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
-              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Plate Number</th>
+              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider leading-tight">Plate<br />Number</th>
               {isCreator && (
                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Vehicle Type</th>
               )}
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Number Plate</th>
               {hasDirectionData && (
-                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Direction</th>
+                <th
+                  onClick={toggleDirectionSort}
+                  className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors"
+                  title="Click to sort by direction"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Direction
+                    {directionSort === 'asc' && (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7" />
+                      </svg>
+                    )}
+                    {directionSort === 'desc' && (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                    {!directionSort && (
+                      <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                      </svg>
+                    )}
+                  </span>
+                </th>
               )}
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timeline</th>
               {/* Action column - only show if user has comp004 or comp005 */}
@@ -618,10 +670,8 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                     : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'
                   } ${index < currentLogs.length - 1 ? 'border-b border-gray-100 dark:border-slate-700' : ''}`}>
                   <td className="py-5 px-6">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{log.location_name}</span>
-                  </td>
-                  <td className="py-5 px-6">
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{log.checkpoint_name}</span>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">{log.location_name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{log.checkpoint_name}</div>
                   </td>
                   <td className="py-5 px-6">
                     <div className="text-sm text-gray-900 dark:text-white">
@@ -687,12 +737,13 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                           setSelectedVehicleForTimeline(log);
                           setShowTimelineModal(true);
                         }}
-                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-800 transition-all flex items-center gap-1.5"
+                        title="View Timeline"
+                        className="p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full border border-blue-200 dark:border-blue-800 transition-all inline-flex items-center justify-center"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                        View
                       </button>
                     ) : (
                       <span className="text-sm text-gray-400 dark:text-gray-500">N/A</span>
@@ -1073,8 +1124,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
         isOpen={showTimelineModal}
         onClose={() => setShowTimelineModal(false)}
         vehicleData={selectedVehicleForTimeline}
-        getPlateImage={getPlateImage}
-        getVehicleImage={getVehicleImage}
+        onEntryClick={handleTimelineEntryClick}
       />
 
       {/* Revision Info Modal */}

@@ -6,6 +6,8 @@ import CheckpointSettings from './CheckpointSettings';
 import UserAccessSettings from './UserAccessSettings';
 import AddUpdateCamera from './AddUpdateCamera';
 import DirectionSettings from './DirectionSettings';
+import TriggerConfigSettings from './TriggerConfigSettings';
+import ConnectedCameraSettings from './ConnectedCameraSettings';
 import PageHeader from '../common/PageHeader';
 
 const Configurations = () => {
@@ -69,6 +71,10 @@ const Configurations = () => {
         return 'User Access Settings';
       case 'direction':
         return 'Direction Settings';
+      case 'triggerConfig':
+        return 'Trigger Config Settings';
+      case 'connectedCamera':
+        return 'Connected Cameras';
       default:
         return 'System Configurations';
     }
@@ -86,6 +92,10 @@ const Configurations = () => {
         return 'Control user permissions, roles and access levels';
       case 'direction':
         return 'Configure approaching and departing direction tracking per camera';
+      case 'triggerConfig':
+        return 'Create and manage reusable trigger configs for connected cameras (Creator only)';
+      case 'connectedCamera':
+        return 'Map and manage connected devices (cameras, boom barriers, etc.) per camera (Creator only)';
       default:
         return 'Manage system settings, camera configurations, and user access control';
     }
@@ -105,6 +115,10 @@ const Configurations = () => {
       breadcrumbs.push({ label: 'User Access Settings', onClick: null });
     } else if (activePage === 'direction') {
       breadcrumbs.push({ label: 'Direction Settings', onClick: null });
+    } else if (activePage === 'triggerConfig') {
+      breadcrumbs.push({ label: 'Trigger Config Settings', onClick: null });
+    } else if (activePage === 'connectedCamera') {
+      breadcrumbs.push({ label: 'Connected Cameras', onClick: null });
     }
 
     return breadcrumbs;
@@ -169,6 +183,8 @@ const Configurations = () => {
         {activePage === 'checkpoint' && <CheckpointSettings hasPermissionForComponent={hasPermissionForComponent} />}
         {activePage === 'userAccess' && <UserAccessSettings hasPermissionForComponent={hasPermissionForComponent} />}
         {activePage === 'direction' && <DirectionSettings />}
+        {activePage === 'triggerConfig' && <TriggerConfigSettings />}
+        {activePage === 'connectedCamera' && <ConnectedCameraSettings />}
       </div>
     </div>
   );

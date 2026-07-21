@@ -1,8 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../../utils/fetchWrapper';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+
+// Evidence Thumbnail - the proof/evidence image isn't a public presigned S3 URL like the
+// vehicle/plate images, so it can't go straight into <img src>. Fetch it via an
+// authenticated request and render it as a blob object URL instead.
+const EvidenceThumbnail = ({ assetId }) => {
+  const [imageUrl, setImageUrl] = useState(null);
+  const [status, setStatus] = useState('loading');
+
+  useEffect(() => {
+    let objectUrl = null;
+    let cancelled = false;
+    setStatus('loading');
+
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/evidence/${assetId}`);
+        if (!res.ok) throw new Error('Failed to load evidence');
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+        setStatus('ready');
+      } catch {
+        if (!cancelled) setStatus('error');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [assetId]);
+
+  if (status === 'loading') {
+    return <div className="w-full h-full min-h-[80px] rounded-lg bg-gray-200 dark:bg-slate-700 animate-pulse" />;
+  }
+  if (status === 'error' || !imageUrl) {
+    return <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">Evidence unavailable</p>;
+  }
+  return (
+    <img
+      src={imageUrl}
+      alt="Evidence"
+      onClick={() => window.open(imageUrl, '_blank')}
+      className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
+    />
+  );
+};
 
 const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getVehicleImage, canDownload }) => {
   const [downloading, setDownloading] = useState(false);
-  
+  useBodyScrollLock(isOpen && !!vehicleData);
+
   if (!isOpen || !vehicleData) return null;
 
   const formatTimestamp = (timestamp) => {
@@ -69,7 +120,7 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
       link.download = `vehicle-${vehicleData.plate_number}-${Date.now()}.png`;
       link.href = paddedCanvas.toDataURL('image/png');
       link.click();
-      
+
       // Success notification
       const successDiv = document.createElement('div');
       successDiv.className = 'fixed top-4 right-4 bg-green-50 border border-green-200 text-green-800 px-6 py-4 rounded-lg shadow-lg z-[100] animate-fadeIn';
@@ -103,7 +154,7 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/70 backdrop-blur-sm"
@@ -112,13 +163,12 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
 
       {/* Modal Container */}
       <div
-        className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl flex flex-col"
-        style={{ height: '80vh' }}
+        className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 rounded-t-2xl">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Vehicle Details</h3>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 rounded-t-2xl">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Vehicle Details</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
@@ -130,106 +180,105 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-5 min-h-0 overflow-hidden">
-          <div id="vehicle-details-content" className="h-full grid grid-cols-12 gap-5 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">
+          <div id="vehicle-details-content" className="flex flex-col gap-4 sm:gap-5">
 
-            {/* Left - Vehicle Image */}
-            <div className="col-span-9 h-full overflow-hidden">
-              <div className="bg-gray-50 dark:bg-slate-900 rounded-xl h-full p-4 flex items-center justify-center">
-                <img
-                  src={getVehicleImage(vehicleData)}
-                  alt="Vehicle"
-                  onError={(e) => {
-                    e.target.src = '/placeholder-vehicle.svg';
-                  }}
-                  crossOrigin="anonymous"
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
-              </div>
-            </div>
-
-            {/* Right - Details */}
-            <div className="col-span-3 h-full flex flex-col overflow-hidden gap-3">
-
-              {/* Number Plate */}
-              <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-3 flex-shrink-0" style={{ height: '35%' }}>
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Number Plate</p>
-                <div className="bg-white dark:bg-slate-800 rounded-lg p-2 flex items-center justify-center overflow-hidden" style={{ height: 'calc(100% - 24px)' }}>
+            {/* Images row: Vehicle + Number Plate */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
+              <div className="lg:col-span-9">
+                <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-3 sm:p-4 flex items-center justify-center h-64 sm:h-80 lg:h-[55vh]">
                   <img
-                    src={getPlateImage(vehicleData)}
-                    alt="Plate"
+                    src={getVehicleImage(vehicleData)}
+                    alt="Vehicle"
                     onError={(e) => {
-                      e.target.src = '/placeholder-plate.svg';
+                      e.target.src = '/placeholder-vehicle.svg';
                     }}
                     crossOrigin="anonymous"
-                    className="max-w-full max-h-full object-contain"
+                    className="max-w-full max-h-full object-contain rounded-lg"
                   />
                 </div>
               </div>
 
-              {/* Details Card */}
-              <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-xl p-3 overflow-hidden flex items-center justify-center">
-                <div className="w-full flex flex-col justify-between">
-
-                  {/* Plate Number */}
-                  <div className="flex-shrink-0 text-center">
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Plate Number</p>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">{vehicleData.plate_number}</p>
+              <div className="lg:col-span-3">
+                <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-3 h-64 sm:h-80 lg:h-[55vh] flex flex-col">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2 flex-shrink-0">Number Plate</p>
+                  <div className="flex-1 min-h-0 bg-white dark:bg-slate-800 rounded-lg p-2 flex items-center justify-center">
+                    <img
+                      src={getPlateImage(vehicleData)}
+                      alt="Plate"
+                      onError={(e) => {
+                        e.target.src = '/placeholder-plate.svg';
+                      }}
+                      crossOrigin="anonymous"
+                      className="max-w-full max-h-full object-contain"
+                    />
                   </div>
-
-                  {/* Separator */}
-                  <div className="my-2">
-                    <div className="h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-slate-600 to-transparent"></div>
-                  </div>
-
-                  {/* Location */}
-                  <div className="flex-shrink-0 text-center">
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Location</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <p className="text-xs font-medium text-gray-900 dark:text-white">{vehicleData.location_name}</p>
-                    </div>
-                  </div>
-
-                  {/* Separator */}
-                  <div className="my-2">
-                    <div className="h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-slate-600 to-transparent"></div>
-                  </div>
-
-                  {/* Checkpoint */}
-                  <div className="flex-shrink-0 text-center">
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Checkpoint</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <p className="text-xs font-medium text-gray-900 dark:text-white">{vehicleData.checkpoint_name}</p>
-                    </div>
-                  </div>
-
-                  {/* Separator */}
-                  <div className="my-2">
-                    <div className="h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-slate-600 to-transparent"></div>
-                  </div>
-
-                  {/* Timestamp */}
-                  <div className="flex-shrink-0 text-center">
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Timestamp</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <p className="text-xs font-medium text-gray-900 dark:text-white">{date}</p>
-                        <p className="text-[10px] text-gray-600 dark:text-gray-400">{time}</p>
-                      </div>
-                    </div>
-                  </div>
-
                 </div>
+              </div>
+            </div>
+
+            {/* Evidence gallery - only shown when this detection has matching proof assets (can be multiple) */}
+            {vehicleData.evidence_asset_ids?.length > 0 && (
+              <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-3 sm:p-4">
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
+                  Evidence {vehicleData.evidence_asset_ids.length > 1 ? `(${vehicleData.evidence_asset_ids.length})` : ''}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {vehicleData.evidence_asset_ids.map((assetId) => (
+                    <div
+                      key={assetId}
+                      className="bg-white dark:bg-slate-800 rounded-lg p-2 h-24 sm:h-28 flex items-center justify-center"
+                    >
+                      <EvidenceThumbnail assetId={assetId} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Details bar - Plate Number / Location / Checkpoint / Timestamp */}
+            <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-4 sm:p-5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-4 gap-x-3">
+
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Plate Number</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{vehicleData.plate_number}</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Location</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <p className="text-xs font-medium text-gray-900 dark:text-white">{vehicleData.location_name}</p>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Checkpoint</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p className="text-xs font-medium text-gray-900 dark:text-white">{vehicleData.checkpoint_name}</p>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Timestamp</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-xs font-medium text-gray-900 dark:text-white">{date}</p>
+                      <p className="text-[10px] text-gray-600 dark:text-gray-400">{time}</p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -237,12 +286,12 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex-shrink-0 rounded-b-2xl">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex-shrink-0 rounded-b-2xl">
           {canDownload && (
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="px-6 py-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold rounded-lg flex items-center gap-2 border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="px-6 py-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold rounded-lg flex items-center justify-center gap-2 border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {downloading ? (
                 <>

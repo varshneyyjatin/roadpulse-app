@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { handleApiError } from '../../utils/apiErrorHandler';
 import { fetchWithAuth } from '../../utils/fetchWrapper';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlacklisted: alreadyBlacklisted, isWhitelisted: alreadyWhitelisted, onSuccess }) => {
+  useBodyScrollLock(isOpen);
   const [reason, setReason] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
