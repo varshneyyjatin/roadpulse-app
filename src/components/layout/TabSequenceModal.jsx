@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const TabSequenceModal = ({ isOpen, onClose, tabs, onSave }) => {
+  useBodyScrollLock(isOpen);
   const [orderedTabs, setOrderedTabs] = useState([]);
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);

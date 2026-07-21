@@ -1,4 +1,8 @@
-const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+
+const TimelineModal = ({ isOpen, onClose, vehicleData, onEntryClick }) => {
+  useBodyScrollLock(isOpen && !!vehicleData);
+
   if (!isOpen || !vehicleData) return null;
 
   const formatTimestamp = (timestamp) => {
@@ -60,7 +64,12 @@ const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
                       </div>
 
                       {/* Content */}
-                      <div className="flex-1 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
+                      <div
+                        onClick={() => onEntryClick?.(entry)}
+                        className={`flex-1 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 shadow-sm transition-all ${
+                          onEntryClick ? 'cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700' : ''
+                        }`}
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">
@@ -88,19 +97,9 @@ const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
                             )}
                           </div>
                         </div>
-                        
-                        {/* Image Display */}
-                        {entry.image && (
-                          <div className="mt-3">
-                            <img 
-                              src={entry.image} 
-                              alt={`Detection at ${entry.location_name}`}
-                              className="w-full h-48 object-cover rounded-lg border border-gray-200 dark:border-slate-600"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
-                            />
-                          </div>
+
+                        {onEntryClick && (
+                          <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 font-medium">Click to view full details →</p>
                         )}
                       </div>
                     </div>

@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const BlacklistDetailsModal = ({ isOpen, onClose, dashboardData }) => {
+  useBodyScrollLock(isOpen);
+
   // Filter blacklisted vehicles from dashboard data
   const blacklistData = useMemo(() => {
     if (!dashboardData?.summary_data) return [];

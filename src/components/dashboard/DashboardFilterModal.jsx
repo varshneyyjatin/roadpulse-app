@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MONTHS = [
@@ -356,6 +357,7 @@ const SummaryBlock = ({ label, dateStr, time, onTimeChange, timeEnabled }) => {
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
 const DashboardFilterModal = ({ isOpen, onClose, onApply, currentFilters }) => {
+  useBodyScrollLock(isOpen);
   const startParsed = parseExisting(currentFilters?.start_date, '00:00');
   const endParsed   = parseExisting(currentFilters?.end_date,   '23:55');
 

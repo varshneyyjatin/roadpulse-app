@@ -3,6 +3,7 @@ import { fetchWithAuth } from '../../utils/fetchWrapper';
 import { handleApiError } from '../../utils/apiErrorHandler';
 import { FullPageLoader } from '../common/Loader';
 import ErrorState from '../common/ErrorState';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const CheckpointSettings = ({ hasPermissionForComponent }) => {
   // Permission checks
@@ -16,6 +17,7 @@ const CheckpointSettings = ({ hasPermissionForComponent }) => {
   const [error, setError] = useState(null);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  useBodyScrollLock(showDetailsModal);
 
   useEffect(() => {
     fetchCheckpoints();

@@ -1,4 +1,8 @@
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+
 const RevisionInfoModal = ({ isOpen, onClose, revisionData }) => {
+  useBodyScrollLock(isOpen && !!revisionData);
+
   if (!isOpen || !revisionData) return null;
 
   const formatTimestamp = (timestamp) => {

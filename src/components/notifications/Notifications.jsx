@@ -5,6 +5,7 @@ import { handleApiError } from '../../utils/apiErrorHandler';
 import PageHeader from '../common/PageHeader';
 import Loader from '../common/Loader';
 import NotificationCategoryBadge from './NotificationCategoryBadge';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const CATEGORY_FILTERS = [
   { id: 'all', label: 'All' },
@@ -26,6 +27,7 @@ const Notifications = () => {
   const [error, setError] = useState(null);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  useBodyScrollLock(!!selectedNotification && showDetailsModal);
   const [markingAsRead, setMarkingAsRead] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
 
