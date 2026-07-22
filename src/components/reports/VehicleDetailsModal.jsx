@@ -5,7 +5,7 @@ import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 // Evidence Thumbnail - the proof/evidence image isn't a public presigned S3 URL like the
 // vehicle/plate images, so it can't go straight into <img src>. Fetch it via an
 // authenticated request and render it as a blob object URL instead.
-const EvidenceThumbnail = ({ assetId }) => {
+const EvidenceThumbnail = ({ assetId, index, onPreview }) => {
   const [imageUrl, setImageUrl] = useState(null);
   const [status, setStatus] = useState('loading');
 
@@ -16,7 +16,7 @@ const EvidenceThumbnail = ({ assetId }) => {
 
     (async () => {
       try {
-        const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/evidence/${assetId}`);
+        const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/dashboard/evidence/${assetId}/${index}`);
         if (!res.ok) throw new Error('Failed to load evidence');
         const blob = await res.blob();
         if (cancelled) return;
@@ -32,7 +32,7 @@ const EvidenceThumbnail = ({ assetId }) => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [assetId]);
+  }, [assetId, index]);
 
   if (status === 'loading') {
     return <div className="w-full h-full min-h-[80px] rounded-lg bg-gray-200 dark:bg-slate-700 animate-pulse" />;
@@ -44,7 +44,7 @@ const EvidenceThumbnail = ({ assetId }) => {
     <img
       src={imageUrl}
       alt="Evidence"
-      onClick={() => window.open(imageUrl, '_blank')}
+      onClick={() => onPreview?.(imageUrl)}
       className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
     />
   );
@@ -52,6 +52,7 @@ const EvidenceThumbnail = ({ assetId }) => {
 
 const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getVehicleImage, canDownload }) => {
   const [downloading, setDownloading] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState(null);
   useBodyScrollLock(isOpen && !!vehicleData);
 
   if (!isOpen || !vehicleData) return null;
@@ -154,6 +155,7 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
       <div
@@ -218,18 +220,18 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
             </div>
 
             {/* Evidence gallery - only shown when this detection has matching proof assets (can be multiple) */}
-            {vehicleData.evidence_asset_ids?.length > 0 && (
+            {vehicleData.evidence_assets?.length > 0 && (
               <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-3 sm:p-4">
                 <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
-                  Evidence {vehicleData.evidence_asset_ids.length > 1 ? `(${vehicleData.evidence_asset_ids.length})` : ''}
+                  Evidence {vehicleData.evidence_assets.length > 1 ? `(${vehicleData.evidence_assets.length})` : ''}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {vehicleData.evidence_asset_ids.map((assetId) => (
+                  {vehicleData.evidence_assets.map((ev) => (
                     <div
-                      key={assetId}
+                      key={`${ev.asset_id}-${ev.index}`}
                       className="bg-white dark:bg-slate-800 rounded-lg p-2 h-24 sm:h-28 flex items-center justify-center"
                     >
-                      <EvidenceThumbnail assetId={assetId} />
+                      <EvidenceThumbnail assetId={ev.asset_id} index={ev.index} onPreview={setPreviewSrc} />
                     </div>
                   ))}
                 </div>
@@ -317,6 +319,58 @@ const VehicleDetailsModal = ({ isOpen, onClose, vehicleData, getPlateImage, getV
         </div>
       </div>
     </div>
+
+    {/* Evidence image preview overlay - sits above this modal (z-50), opened by clicking a thumbnail */}
+    {previewSrc && (
+      <div
+        className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+        onClick={() => setPreviewSrc(null)}
+      >
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm"></div>
+        <div
+          className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 rounded-t-2xl">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Evidence Image</h3>
+            <button
+              onClick={() => setPreviewSrc(null)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-6">
+            <div className="bg-gray-50 dark:bg-slate-900 rounded-xl p-4 flex items-center justify-center min-h-[300px]">
+              <img src={previewSrc} alt="Evidence" className="max-w-full max-h-[65vh] object-contain rounded-lg" />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 rounded-b-2xl">
+            {canDownload && (
+              <a
+                href={previewSrc}
+                download
+                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download
+              </a>
+            )}
+            <button
+              onClick={() => setPreviewSrc(null)}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
