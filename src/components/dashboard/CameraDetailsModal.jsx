@@ -4,6 +4,7 @@ import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 const CameraDetailsModal = ({ isOpen, onClose, locations }) => {
   useBodyScrollLock(isOpen);
   const [searchTerm, setSearchTerm] = useState('');
+  const [connectedCamerasView, setConnectedCamerasView] = useState(null); // { cameraName, connectedCameras }
 
   // Close modal on Escape key
   useEffect(() => {
@@ -103,6 +104,7 @@ const CameraDetailsModal = ({ isOpen, onClose, locations }) => {
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">IP Address</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Location</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Checkpoint</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Connected Cameras</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -138,6 +140,24 @@ const CameraDetailsModal = ({ isOpen, onClose, locations }) => {
                       <td className="py-3 px-4">
                         <span className="text-sm text-gray-600 dark:text-gray-400">{camera.checkpoint_name}</span>
                       </td>
+                      <td className="py-3 px-4">
+                        {camera.connected_cameras?.length > 0 ? (
+                          <button
+                            onClick={() => setConnectedCamerasView({
+                              cameraName: camera.camera_name,
+                              connectedCameras: camera.connected_cameras,
+                            })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-semibold rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            {camera.connected_cameras.length}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -159,6 +179,89 @@ const CameraDetailsModal = ({ isOpen, onClose, locations }) => {
           </button>
         </div>
       </div>
+
+      {/* Connected Cameras details - nested modal, sits above this one (z-60) */}
+      {connectedCamerasView && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          onClick={(e) => { e.stopPropagation(); setConnectedCamerasView(null); }}
+        >
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm"></div>
+          <div
+            className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/10 border-b border-indigo-200 dark:border-indigo-800/50">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Connected Cameras</h2>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {connectedCamerasView.connectedCameras.length} device(s) connected to {connectedCamerasView.cameraName}
+                </p>
+              </div>
+              <button
+                onClick={() => setConnectedCamerasView(null)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors p-1 hover:bg-white/50 dark:hover:bg-slate-600/50 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200 dark:border-slate-600">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">IP Address</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Port</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">RTSP Path</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Trigger</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                    {connectedCamerasView.connectedCameras.map((cc) => (
+                      <tr key={cc.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <td className="py-3 px-4">
+                          <code className="text-xs bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-blue-700 dark:text-blue-400 font-mono">
+                            {cc.ip_address || '—'}
+                          </code>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{cc.port || '—'}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{cc.rtsp_path || '—'}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {cc.trigger_enabled ? (
+                            <span className="inline-flex items-center px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs font-semibold rounded-lg border border-green-200 dark:border-green-800">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-xs font-semibold rounded-lg border border-gray-200 dark:border-slate-600">
+                              Inactive
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-200 dark:border-slate-600 flex justify-end">
+              <button
+                onClick={() => setConnectedCamerasView(null)}
+                className="px-5 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white text-sm font-semibold rounded-xl transition-all shadow-sm hover:shadow-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

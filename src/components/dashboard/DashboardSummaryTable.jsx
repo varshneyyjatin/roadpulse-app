@@ -618,7 +618,8 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-700/30">
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location / Checkpoint</th>
-              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
+              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Date</th>
+              <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Time</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider leading-tight">Plate<br />Number</th>
               {isCreator && (
                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Vehicle Type</th>
@@ -674,10 +675,10 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                     <div className="text-xs text-gray-500 dark:text-gray-400">{log.checkpoint_name}</div>
                   </td>
                   <td className="py-5 px-6">
-                    <div className="text-sm text-gray-900 dark:text-white">
-                      <div className="font-medium">{date}</div>
-                      <div className="text-gray-600 dark:text-gray-400">{time}</div>
-                    </div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">{date}</div>
+                  </td>
+                  <td className="py-5 px-6">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{time}</div>
                   </td>
                   <td className="py-5 px-6">
                     <CopyablePlateNumber 
