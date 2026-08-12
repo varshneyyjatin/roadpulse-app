@@ -5,6 +5,7 @@ import Login from './components/auth/Login';
 import ResetPassword from './components/auth/ResetPassword';
 import Navbar from './components/layout/Navbar';
 import Topbar from './components/layout/Topbar';
+import MaintenanceBanner from './components/layout/MaintenanceBanner';
 import Footer from './components/layout/Footer';
 import Dashboard from './components/dashboard/Dashboard';
 import Reports from './components/reports/Reports';
@@ -129,6 +130,7 @@ const AppContent = () => {
       <div className="min-h-screen bg-white dark:bg-slate-900 transition-colors duration-300">
         <Navbar setActiveTab={handleTabChange} onLogout={() => showToast('Logged out successfully', 'info')} />
         <Topbar activeTab={currentTab} setActiveTab={handleTabChange} />
+        <MaintenanceBanner />
         {renderActiveTab()}
         <Footer />
       </div>
