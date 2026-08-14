@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AccessControlProvider, useAccessControl } from './contexts/AccessControl';
 import Login from './components/auth/Login';
 import ResetPassword from './components/auth/ResetPassword';
+import ExternalApiDocumentation from './components/apidocs/ExternalApiDocumentation';
 import Navbar from './components/layout/Navbar';
 import Topbar from './components/layout/Topbar';
 import MaintenanceBanner from './components/layout/MaintenanceBanner';
@@ -146,6 +147,7 @@ function App() {
       <AccessControlProvider>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/external-api-documentation" element={<ExternalApiDocumentation />} />
           <Route path="/*" element={<AppContent />} />
         </Routes>
       </AccessControlProvider>
