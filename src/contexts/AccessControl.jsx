@@ -65,6 +65,8 @@ const AccessControlProvider = ({ children }) => {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('token_type', data.token_type || 'bearer');
 
+      console.log('Access Token:', data.access_token);
+
       // Fetch user permissions immediately
       await fetchUserPermissions(false);
 

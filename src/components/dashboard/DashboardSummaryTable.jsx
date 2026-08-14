@@ -193,9 +193,10 @@ const CustomDropdown = ({ label, value, onChange, options, placeholder, icon, sh
   );
 };
 
-const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false, canFixVehicleNumber = false, canDownloadImage = false, onDataRefresh, onPageChange }) => {
+const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false, canFixVehicleNumber = false, canDownloadImage = false, canViewVehicleType = false, onDataRefresh, onPageChange }) => {
   const { user } = useAccessControl();
   const isCreator = isCreatorRole(user);
+  const showVehicleType = isCreator || canViewVehicleType;
 
   const vehicleLogs = data?.summary_data || [];
   const pagination = data?.pagination || {};
@@ -621,7 +622,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Date</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Time</th>
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider leading-tight">Plate<br />Number</th>
-              {isCreator && (
+              {showVehicleType && (
                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Vehicle Type</th>
               )}
               <th className="text-left py-4 px-6 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Number Plate</th>
@@ -686,7 +687,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                       className="text-gray-900 dark:text-white"
                     />
                   </td>
-                  {isCreator && (
+                  {showVehicleType && (
                     <td className="py-5 px-6">
                       {log.vehicle_type ? (
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -930,7 +931,7 @@ const DashboardSummaryTable = ({ data, appliedFilters, canAddToWatchlist = false
                 </div>
                 <span className="text-gray-400">•</span>
                 <span className="text-xs text-gray-600 dark:text-gray-400">{log.checkpoint_name}</span>
-                {isCreator && log.vehicle_type && (
+                {showVehicleType && log.vehicle_type && (
                   <>
                     <span className="text-gray-400">•</span>
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{log.vehicle_type}</span>

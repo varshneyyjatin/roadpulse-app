@@ -725,6 +725,7 @@ const Dashboard = () => {
                 canAddToWatchlist={hasPermissionForComponent('Dashboard', 'comp004', 'can_view')}
                 canFixVehicleNumber={hasPermissionForComponent('Dashboard', 'comp005', 'can_view')}
                 canDownloadImage={hasPermissionForComponent('Dashboard', 'comp006', 'can_view')}
+                canViewVehicleType={hasPermissionForComponent('Dashboard', 'comp007', 'can_view')}
                 onDataRefresh={fetchDashboardData}
                 onPageChange={(page, pageSize) => fetchDashboardData(appliedFilters, page, pageSize)}
               />
