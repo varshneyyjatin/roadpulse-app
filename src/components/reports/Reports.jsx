@@ -334,6 +334,11 @@ const Reports = () => {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [paginationLoading, setPaginationLoading] = useState(false);
 
+  // Similar Plates Pagination States (client-side, separate from Filter Reports pagination)
+  const [similarCurrentPage, setSimilarCurrentPage] = useState(1);
+  const [similarItemsPerPage, setSimilarItemsPerPage] = useState(50);
+  const [similarPaginationLoading, setSimilarPaginationLoading] = useState(false);
+
   // Vehicle Details Modal States
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -351,6 +356,38 @@ const Reports = () => {
   const filteredSimilarResults = useMemo(() => {
     return similarResults[similarityThreshold] || [];
   }, [similarResults, similarityThreshold]);
+
+  // Client-side pagination for Similar Plates results
+  const similarTotalPages = Math.max(1, Math.ceil(filteredSimilarResults.length / similarItemsPerPage));
+
+  const paginatedSimilarResults = useMemo(() => {
+    const start = (similarCurrentPage - 1) * similarItemsPerPage;
+    return filteredSimilarResults.slice(start, start + similarItemsPerPage);
+  }, [filteredSimilarResults, similarCurrentPage, similarItemsPerPage]);
+
+  // Reset to page 1 whenever search results or threshold change
+  useEffect(() => {
+    setSimilarCurrentPage(1);
+  }, [filteredSimilarResults]);
+
+  const handleSimilarPageChange = (page) => {
+    setSimilarPaginationLoading(true);
+    setSimilarCurrentPage(page);
+    setTimeout(() => setSimilarPaginationLoading(false), 400);
+  };
+
+  const handleSimilarPageSizeChange = (newSize) => {
+    setSimilarPaginationLoading(true);
+    setSimilarItemsPerPage(newSize);
+    setSimilarCurrentPage(1);
+    setTimeout(() => setSimilarPaginationLoading(false), 400);
+  };
+
+  const handleSimilarGoToFirstPage = () => {
+    if (similarCurrentPage !== 1) {
+      handleSimilarPageChange(1);
+    }
+  };
 
   // Get checkpoints based on selected locations
   const checkpointOptions = useMemo(() => {
@@ -538,7 +575,9 @@ const Reports = () => {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch similar plates');
+        const error = new Error('Failed to fetch similar plates');
+        error.response = { status: response.status };
+        throw error;
       }
 
       const data = await response.json();
@@ -546,9 +585,8 @@ const Reports = () => {
       setActiveSection('similar');
       setSimilarResults(data);
     } catch (err) {
-      
-
-      setSimilarError('Failed to fetch similar plates');
+      const errorInfo = handleApiError(err);
+      setSimilarError(errorInfo.error.message);
       setSimilarResults({});
     } finally {
       setSimilarLoading(false);
@@ -1240,54 +1278,102 @@ const Reports = () => {
                     />
                   </div>
 
-                  {/* Similarity Slider with Markers */}
+                  {/* Similarity Threshold - Radio Buttons */}
                   <div className="flex flex-col justify-center">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Similarity
-                      </label>
-                      <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
-                        {similarityThreshold}%
-                      </span>
-                    </div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Similarity
+                    </label>
 
-
-                    {/* Slider */}
-                    <input
-                      type="range"
-                      min="25"
-                      max="100"
-                      step="1"
-                      value={similarityThreshold}
-                      disabled={!similarPlateQuery.trim()}
-                      onChange={(e) => {
-                        const rawValue = Number(e.target.value); 
-                        setSimilarityThreshold((prev) => {
-                        if (rawValue > prev) {
-                          return Math.min(100, prev + 25);
-                        }
-
-                        if (rawValue < prev) {
-                          return Math.max(25, prev - 25);
-                        }
-
-                        return prev;
-                      });
-                      }}
-                      className={`w-full h-2 rounded-lg appearance-none transition-all mb-1 ${!similarPlateQuery.trim()
-                          ? 'bg-gray-200 dark:bg-slate-700 cursor-not-allowed opacity-50'
-                          : 'bg-gray-300 dark:bg-slate-600 cursor-pointer accent-blue-600'
-                        }`}
-                    />
-
-                    {/* Percentage Markers */}
-                    <div className="flex justify-between px-0 text-xs text-gray-600 dark:text-gray-400">
-                      <span>25%</span>
-                      <span>50%</span>
-                      <span>75%</span>
-                      <span>100%</span>
+                    <div className="flex items-center justify-between w-full">
+                      {[25, 50, 75, 100].map((value) => (
+                        <label
+                          key={value}
+                          className={`flex items-center gap-2 ${!similarPlateQuery.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                            }`}
+                        >
+                          <input
+                            type="radio"
+                            name="similarityThreshold"
+                            checked={similarityThreshold === value}
+                            disabled={!similarPlateQuery.trim()}
+                            onChange={() => setSimilarityThreshold(value)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          />
+                          <span className={`text-sm font-medium transition-colors ${similarityThreshold === value ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'
+                            }`}>
+                            {value}%
+                          </span>
+                        </label>
+                      ))}
                     </div>
                   </div>
+
+                  {/* Similarity Threshold - Checkbox Style (kept for later, uncomment to switch back)
+                  <div className="flex flex-col justify-center">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Similarity
+                    </label>
+
+                    <div className="flex items-center gap-2 w-full">
+                      {[25, 50, 75, 100].map((value) => (
+                        <label
+                          key={value}
+                          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-all group ${!similarPlateQuery.trim()
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'cursor-pointer hover:border-blue-300 dark:hover:border-blue-700'
+                            }`}
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={similarityThreshold === value}
+                              disabled={!similarPlateQuery.trim()}
+                              onChange={() => setSimilarityThreshold(value)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-slate-700 peer-checked:bg-blue-600 peer-checked:border-blue-600 transition-all duration-200 flex items-center justify-center">
+                              <svg className={`w-2.5 h-2.5 text-white transition-all duration-200 ${similarityThreshold === value ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          </div>
+                          <span className={`text-sm font-medium transition-colors ${similarityThreshold === value ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400'}`}>
+                            {value}%
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  */}
+
+                  {/* Similarity Threshold - Segmented Pill Buttons (kept for later, uncomment to switch back)
+                  <div className="flex flex-col justify-center">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Similarity
+                    </label>
+
+                    <div className={`inline-flex rounded-lg border overflow-hidden w-full ${!similarPlateQuery.trim()
+                        ? 'opacity-50 border-gray-200 dark:border-slate-700'
+                        : 'border-gray-300 dark:border-slate-600'
+                      }`}>
+                      {[25, 50, 75, 100].map((value, idx) => (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={!similarPlateQuery.trim()}
+                          onClick={() => setSimilarityThreshold(value)}
+                          className={`flex-1 px-3 py-2 text-sm font-semibold transition-colors ${idx !== 0 ? 'border-l border-gray-300 dark:border-slate-600' : ''
+                            } ${similarityThreshold === value
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                            } ${!similarPlateQuery.trim() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          {value}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  */}
                 </div>
 
                 {/* Results Section */}
@@ -1315,14 +1401,25 @@ const Reports = () => {
                 )}
 
                 {/* Results Count */}
-                {activeTab === 'similar' && filteredSimilarResults.length > 0 && (
+                {activeTab === 'similar' && canViewTable && filteredSimilarResults.length > 0 && (
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 ml-4 mb-3">
                     {filteredSimilarResults.length} similar plate{filteredSimilarResults.length !== 1 ? 's' : ''} found
                   </p>
                 )}
 
                 {/* Results Table List */}
-                {activeTab === 'similar' && filteredSimilarResults.length > 0 && (
+                {activeTab === 'similar' && canViewTable && filteredSimilarResults.length > 0 && (
+                  <div className="relative">
+                    {/* Pagination Loading Overlay */}
+                    {similarPaginationLoading && (
+                      <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Loading...</p>
+                        </div>
+                      </div>
+                    )}
+
                   <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-100 dark:bg-slate-700/30 border-b border-gray-200 dark:border-slate-700">
@@ -1335,7 +1432,7 @@ const Reports = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredSimilarResults.map((item, index) => {
+                        {paginatedSimilarResults.map((item, index) => {
                           const date = new Date(item.last_seen);
                           const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                           const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -1358,18 +1455,28 @@ const Reports = () => {
                                 </div>
                               </td>
                               <td className="py-5 px-6">
-                                <span className="text-sm font-bold text-gray-900 dark:text-white font-mono">{item.plate_number}</span>
+                                <CopyButton
+                                  text={item.plate_number}
+                                  className="text-sm font-bold text-gray-900 dark:text-white"
+                                />
                               </td>
                               <td className="py-5 px-6">
                                 <img
                                   src={item.plate_image || item.number_plate_image || '/placeholder-plate.svg'}
                                   alt="Plate"
+                                  onClick={() => openDetailsModal({
+                                    ...item,
+                                    timestamp: item.last_seen,
+                                    location_name: item.location,
+                                    checkpoint_name: item.checkpoint_name || item.checkpoint,
+                                    number_plate_image: item.plate_image || item.number_plate_image
+                                  })}
                                   onError={(e) => {
                                     console.error('Failed to load plate image, using placeholder');
                                     e.target.src = '/placeholder-plate.svg';
                                   }}
                                   crossOrigin="anonymous"
-                                  className="w-32 h-16 object-contain rounded border border-gray-200 dark:border-slate-700 hover:opacity-80 transition-opacity"
+                                  className="w-32 h-16 object-contain rounded border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                                 />
                               </td>
                             </tr>
@@ -1377,6 +1484,95 @@ const Reports = () => {
                         })}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="p-4 md:p-6 border border-t-0 border-gray-200 dark:border-slate-700 rounded-b-lg bg-gray-50 dark:bg-slate-700/20">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm gap-3">
+                      <span className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm">
+                        Showing {(similarCurrentPage - 1) * similarItemsPerPage + 1} to {Math.min(similarCurrentPage * similarItemsPerPage, filteredSimilarResults.length)} of {filteredSimilarResults.length} entries
+                      </span>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <label className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm whitespace-nowrap">Show:</label>
+                        <div className="w-full sm:w-40">
+                          <CustomDropdown
+                            value={similarItemsPerPage}
+                            onChange={handleSimilarPageSizeChange}
+                            options={entriesOptions}
+                            showSearch={false}
+                            icon={
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                              </svg>
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pagination Controls */}
+                      <div className="flex items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
+                        {/* Go to First Page */}
+                        <button
+                          onClick={handleSimilarGoToFirstPage}
+                          disabled={similarCurrentPage === 1}
+                          className="px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 dark:text-gray-300"
+                          title="Go to first page"
+                        >
+                          First
+                        </button>
+
+                        {/* Previous Page */}
+                        <button
+                          onClick={() => handleSimilarPageChange(similarCurrentPage - 1)}
+                          disabled={similarCurrentPage === 1}
+                          className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, similarTotalPages) }, (_, i) => {
+                            let pageNum;
+                            if (similarTotalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (similarCurrentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (similarCurrentPage >= similarTotalPages - 2) {
+                              pageNum = similarTotalPages - 4 + i;
+                            } else {
+                              pageNum = similarCurrentPage - 2 + i;
+                            }
+
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => handleSimilarPageChange(pageNum)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${similarCurrentPage === pageNum
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                  }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Next Page */}
+                        <button
+                          onClick={() => handleSimilarPageChange(similarCurrentPage + 1)}
+                          disabled={similarCurrentPage === similarTotalPages}
+                          className="p-2 rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   </div>
                 )}
               </div>
