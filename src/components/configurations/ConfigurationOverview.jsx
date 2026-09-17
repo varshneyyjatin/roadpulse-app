@@ -1,18 +1,13 @@
 import { useAccessControl } from '../../contexts/AccessControl';
 
 const ConfigurationOverview = ({ onNavigate }) => {
-  const { hasPermissionForComponent } = useAccessControl();
-  
+  const { hasPermissionForComponent, user } = useAccessControl();
+
   // Permission checks - if no components assigned, show all by default
   const canViewCameraSettings = hasPermissionForComponent('Configurations', 'comp031', 'can_view');
   const canViewCheckpointSettings = hasPermissionForComponent('Configurations', 'comp033', 'can_view');
   const canViewUserAccessSettings = hasPermissionForComponent('Configurations', 'comp035', 'can_view');
-  
-  console.log('Configuration Permissions:', {
-    canViewCameraSettings,
-    canViewCheckpointSettings,
-    canViewUserAccessSettings
-  });
+  const isCreator = user?.role === 'creator';
 
   return (
     <div>
@@ -71,6 +66,87 @@ const ConfigurationOverview = ({ onNavigate }) => {
             </svg>
           </span>
         </div>
+        )}
+
+        {/* Direction Settings — Creator only */}
+        {isCreator && (
+          <div
+            onClick={() => onNavigate('direction')}
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-700 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Direction Settings</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Approaching & departing</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Configure direction tracking and LOI for each camera</p>
+            <span className="text-sm text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1">
+              Configure
+              <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        )}
+
+        {/* Trigger Config Settings — Creator only */}
+        {isCreator && (
+          <div
+            onClick={() => onNavigate('triggerConfig')}
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 hover:shadow-lg hover:border-teal-300 dark:hover:border-teal-700 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Trigger Config Settings</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Reusable device triggers</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Create and manage trigger configs for connected cameras</p>
+            <span className="text-sm text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
+              Configure
+              <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        )}
+
+        {/* Connected Cameras — Creator only */}
+        {isCreator && (
+          <div
+            onClick={() => onNavigate('connectedCamera')}
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-700 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Connected Cameras</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Mapped devices per camera</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Map cameras/boom barriers to a primary camera and link trigger configs</p>
+            <span className="text-sm text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1">
+              Configure
+              <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
         )}
 
         {/* User Access Settings */}

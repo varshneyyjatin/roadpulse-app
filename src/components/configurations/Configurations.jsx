@@ -5,6 +5,9 @@ import CameraSettings from './CameraSettings';
 import CheckpointSettings from './CheckpointSettings';
 import UserAccessSettings from './UserAccessSettings';
 import AddUpdateCamera from './AddUpdateCamera';
+import DirectionSettings from './DirectionSettings';
+import TriggerConfigSettings from './TriggerConfigSettings';
+import ConnectedCameraSettings from './ConnectedCameraSettings';
 import PageHeader from '../common/PageHeader';
 
 const Configurations = () => {
@@ -56,7 +59,7 @@ const Configurations = () => {
     setActivePage('addCamera');
   };
 
-  const getPageTitle = () => { 
+  const getPageTitle = () => {
     switch (activePage) {
       case 'camera':
         return 'Camera Settings';
@@ -66,6 +69,12 @@ const Configurations = () => {
         return 'Checkpoint Settings';
       case 'userAccess':
         return 'User Access Settings';
+      case 'direction':
+        return 'Direction Settings';
+      case 'triggerConfig':
+        return 'Trigger Config Settings';
+      case 'connectedCamera':
+        return 'Connected Cameras';
       default:
         return 'System Configurations';
     }
@@ -81,6 +90,12 @@ const Configurations = () => {
         return 'Manage checkpoints and location-based configurations';
       case 'userAccess':
         return 'Control user permissions, roles and access levels';
+      case 'direction':
+        return 'Configure approaching and departing direction tracking per camera';
+      case 'triggerConfig':
+        return 'Create and manage reusable trigger configs for connected cameras (Creator only)';
+      case 'connectedCamera':
+        return 'Map and manage connected devices (cameras, boom barriers, etc.) per camera (Creator only)';
       default:
         return 'Manage system settings, camera configurations, and user access control';
     }
@@ -88,7 +103,7 @@ const Configurations = () => {
 
   const getBreadcrumbs = () => {
     const breadcrumbs = [{ label: 'Configurations', onClick: () => setActivePage('overview') }];
-    
+
     if (activePage === 'camera') {
       breadcrumbs.push({ label: 'Camera Settings', onClick: null });
     } else if (activePage === 'addCamera') {
@@ -98,8 +113,14 @@ const Configurations = () => {
       breadcrumbs.push({ label: 'Checkpoint Settings', onClick: null });
     } else if (activePage === 'userAccess') {
       breadcrumbs.push({ label: 'User Access Settings', onClick: null });
+    } else if (activePage === 'direction') {
+      breadcrumbs.push({ label: 'Direction Settings', onClick: null });
+    } else if (activePage === 'triggerConfig') {
+      breadcrumbs.push({ label: 'Trigger Config Settings', onClick: null });
+    } else if (activePage === 'connectedCamera') {
+      breadcrumbs.push({ label: 'Connected Cameras', onClick: null });
     }
-    
+
     return breadcrumbs;
   };
 
@@ -161,6 +182,9 @@ const Configurations = () => {
         )}
         {activePage === 'checkpoint' && <CheckpointSettings hasPermissionForComponent={hasPermissionForComponent} />}
         {activePage === 'userAccess' && <UserAccessSettings hasPermissionForComponent={hasPermissionForComponent} />}
+        {activePage === 'direction' && <DirectionSettings />}
+        {activePage === 'triggerConfig' && <TriggerConfigSettings />}
+        {activePage === 'connectedCamera' && <ConnectedCameraSettings />}
       </div>
     </div>
   );

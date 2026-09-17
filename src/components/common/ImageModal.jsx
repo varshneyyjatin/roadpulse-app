@@ -1,4 +1,8 @@
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+
 const ImageModal = ({ isOpen, onClose, imageSrc, isPlateImage = false, canDownload = true }) => {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   const handleFullscreen = () => {

@@ -1,4 +1,8 @@
-const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+
+const TimelineModal = ({ isOpen, onClose, vehicleData, onEntryClick }) => {
+  useBodyScrollLock(isOpen && !!vehicleData);
+
   if (!isOpen || !vehicleData) return null;
 
   const formatTimestamp = (timestamp) => {
@@ -60,7 +64,12 @@ const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
                       </div>
 
                       {/* Content */}
-                      <div className="flex-1 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
+                      <div
+                        onClick={() => onEntryClick?.(entry)}
+                        className={`flex-1 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 shadow-sm transition-all ${
+                          onEntryClick ? 'cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700' : ''
+                        }`}
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">
@@ -68,25 +77,29 @@ const TimelineModal = ({ isOpen, onClose, vehicleData }) => {
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400">{time} • {date}</p>
                           </div>
-                          {isLatest && (
-                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded">
-                              Latest
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Image Display */}
-                        {entry.image && (
-                          <div className="mt-3">
-                            <img 
-                              src={entry.image} 
-                              alt={`Detection at ${entry.location_name}`}
-                              className="w-full h-48 object-cover rounded-lg border border-gray-200 dark:border-slate-600"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
-                            />
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {entry.direction === 'in' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-800">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                                IN
+                              </span>
+                            )}
+                            {entry.direction === 'out' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 text-xs font-semibold rounded-lg border border-orange-200 dark:border-orange-800">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                OUT
+                              </span>
+                            )}
+                            {isLatest && (
+                              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded">
+                                Latest
+                              </span>
+                            )}
                           </div>
+                        </div>
+
+                        {onEntryClick && (
+                          <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 font-medium">Click to view full details →</p>
                         )}
                       </div>
                     </div>

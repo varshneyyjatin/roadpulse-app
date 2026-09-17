@@ -108,8 +108,6 @@ export const getErrorMessage = (error) => {
  * Handle API error and return formatted error object
  */
 export const handleApiError = (error, customMessage = null) => {
-  console.error('API Error:', error);
-
   const errorInfo = getErrorMessage(error);
 
   return {

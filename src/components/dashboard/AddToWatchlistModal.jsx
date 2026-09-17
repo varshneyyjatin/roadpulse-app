@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { handleApiError } from '../../utils/apiErrorHandler';
 import { fetchWithAuth } from '../../utils/fetchWrapper';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlacklisted: alreadyBlacklisted, isWhitelisted: alreadyWhitelisted, onSuccess }) => {
+  useBodyScrollLock(isOpen);
   const [reason, setReason] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -118,8 +120,6 @@ const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlac
         requestBody.plate_number = finalVehicleNumber;
       }
 
-      console.log('🚀 Watchlist API Request:', requestBody);
-
       const response = await fetchWithAuth(`${import.meta.env.VITE_API_BASE_URL}/watchlist/`, {
         method: 'POST',
         body: JSON.stringify(requestBody)
@@ -136,7 +136,6 @@ const AddToWatchlistModal = ({ isOpen, onClose, vehicleNumber, vehicleId, isBlac
       }
 
       const data = await response.json();
-      console.log('✅ Watchlist API Response:', data);
       
       setSuccess(true);
       if (onSuccess) onSuccess(data);

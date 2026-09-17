@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const FixVehicleNumberModal = ({ isOpen, onClose, currentPlateNumber, logId, onSuccess }) => {
+  useBodyScrollLock(isOpen);
   const [newVehicleNumber, setNewVehicleNumber] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,6 @@ const FixVehicleNumberModal = ({ isOpen, onClose, currentPlateNumber, logId, onS
 
     if (!logId) {
       setError('Record ID is missing. Please try again.');
-      console.error('logId is missing:', { logId, currentPlateNumber });
       return;
     }
 
@@ -84,8 +85,6 @@ const FixVehicleNumberModal = ({ isOpen, onClose, currentPlateNumber, logId, onS
         new_value: finalVehicleNumber,
         change_reason: finalReason
       };
-
-      console.log('Fix Vehicle Number Request:', requestData);
 
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/fix-vehicle-number`, {
         method: 'POST',
@@ -144,7 +143,6 @@ const FixVehicleNumberModal = ({ isOpen, onClose, currentPlateNumber, logId, onS
         onClose();
       }, 2000);
     } catch (err) {
-      console.error('Fix Vehicle Number Error:', err);
       setError(err.message || 'Failed to update vehicle number. Please try again.');
     } finally {
       setLoading(false);

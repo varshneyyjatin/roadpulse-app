@@ -145,3 +145,24 @@ html.dark #root {
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background-color: transparent;
 }
+
+/* Hide number input arrows for custom time picker */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Custom time picker styling */
+.time-input-wrapper {
+  position: relative;
+}
+
+.time-input-wrapper input:focus {
+  outline: none;
+}

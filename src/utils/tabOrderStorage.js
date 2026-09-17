@@ -8,8 +8,7 @@ const getAllTabOrders = () => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : {};
-  } catch (error) {
-    console.error('Error reading tab orders:', error);
+  } catch {
     return {};
   }
 };
@@ -19,8 +18,7 @@ const saveAllTabOrders = (allOrders) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(allOrders));
     return true;
-  } catch (error) {
-    console.error('Error saving tab orders:', error);
+  } catch {
     return false;
   }
 };
@@ -34,8 +32,7 @@ export const saveTabOrder = (userId, tabOrder) => {
       updatedAt: new Date().toISOString()
     };
     return saveAllTabOrders(allOrders);
-  } catch (error) {
-    console.error('Error saving tab order for user:', error);
+  } catch {
     return false;
   }
 };
@@ -45,8 +42,7 @@ export const loadTabOrder = (userId) => {
   try {
     const allOrders = getAllTabOrders();
     return allOrders[userId]?.order || null;
-  } catch (error) {
-    console.error('Error loading tab order:', error);
+  } catch {
     return null;
   }
 };
@@ -57,8 +53,7 @@ export const deleteTabOrder = (userId) => {
     const allOrders = getAllTabOrders();
     delete allOrders[userId];
     return saveAllTabOrders(allOrders);
-  } catch (error) {
-    console.error('Error deleting tab order:', error);
+  } catch {
     return false;
   }
 };
@@ -75,8 +70,7 @@ export const exportTabOrders = () => {
     a.click();
     URL.revokeObjectURL(url);
     return true;
-  } catch (error) {
-    console.error('Error exporting tab orders:', error);
+  } catch {
     return false;
   }
 };
@@ -86,8 +80,7 @@ export const importTabOrders = (jsonData) => {
   try {
     const imported = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
     return saveAllTabOrders(imported);
-  } catch (error) {
-    console.error('Error importing tab orders:', error);
+  } catch {
     return false;
   }
 };
